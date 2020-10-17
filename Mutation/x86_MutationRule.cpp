@@ -9,8 +9,8 @@ UINT x86Insn_Mutation::_mov()
 	if (insn.detail == NULL)
 		return result;
 	x86 = &(insn.detail->x86);
-	x86_mem mem = {0};
-	x86_imm imm = {0};
+	x86_mem mem = { 0 };
+	x86_imm imm = { 0 };
 
 
 	//先判断是否是x16或x8代码
@@ -94,7 +94,7 @@ UINT x86Insn_Mutation::_mov()
 			mem.mem_size = x86->operands[1].size;
 			return(_mov_reg_mem(x86->operands[0].reg, &mem));
 		}
-			
+
 		//mov_mem_reg
 		if (x86->operands[0].type == X86_OP_MEM && x86->operands[1].type == X86_OP_REG) {
 			mem.address = (DWORD)insn.address;
@@ -228,7 +228,7 @@ UINT x86Insn_Mutation::_mov_reg_imm(x86_reg op0, x86_imm* imm1)
 	auto rand0 = to_asmjit_reg(randreg0);
 	auto reg_op0 = to_asmjit_reg(op0);
 
-	
+
 	a.pushfd();
 	a.push(rand0);
 	a.mov(rand0, 0);
@@ -312,7 +312,7 @@ UINT x86Insn_Mutation::_mov_reg_mem(x86_reg op0, x86_mem* mem1)
 		//判断是否需要重定位
 		if (Re_flag)
 			b.add(rand1, temp);
-		else 
+		else
 			b.add(rand1, (UINT)disp);
 	}
 	x86::Assembler b(&Mut_Code);
@@ -325,7 +325,7 @@ UINT x86Insn_Mutation::_mov_reg_mem(x86_reg op0, x86_mem* mem1)
 		while (scale--)
 			b.add(rand1, to_asmjit_reg(index));
 	}
-	
+
 	b.push(rand0);
 	_mov_reg_reg(randreg0, op0);
 	x86::Assembler c(&Mut_Code);
@@ -354,7 +354,7 @@ UINT x86Insn_Mutation::_mov_mem_reg(x86_mem* mem0, x86_reg op1)
 	x86::Assembler a(&Mut_Code);
 	if (Check_Reg(op1) == false)
 		throw "传入的reg错误";
-	
+
 
 	x86_reg regs[] = { X86_REG_EAX, X86_REG_EBX, X86_REG_ECX, X86_REG_EDX, X86_REG_EBP, X86_REG_ESP, X86_REG_ESI, X86_REG_EDI };
 	x86_reg randreg0, randreg1;
@@ -396,7 +396,7 @@ UINT x86Insn_Mutation::_mov_mem_reg(x86_mem* mem0, x86_reg op1)
 		//判断是否需要重定位
 		if (Re_flag)
 			b.add(rand0, temp);
-		else 
+		else
 			b.add(rand0, (UINT)disp);
 	}
 	x86::Assembler b(&Mut_Code);
@@ -409,7 +409,7 @@ UINT x86Insn_Mutation::_mov_mem_reg(x86_mem* mem0, x86_reg op1)
 		while (scale--)
 			b.add(rand0, to_asmjit_reg(index));
 	}
-	
+
 	b.push(rand1);
 	_mov_reg_reg(randreg1, op1);
 	x86::Assembler c(&Mut_Code);
@@ -447,7 +447,7 @@ UINT x86Insn_Mutation::_mov_mem_imm(x86_mem* mem0, x86_imm* imm1)
 	x86::Assembler b(&Mut_Code);
 	b.pop(rand0);
 	b.popfd();
-	
+
 
 	return mov_mem_imm;
 }
@@ -490,14 +490,14 @@ UINT x86Insn_Mutation::_mov_reg_imm_16_8(x86_reg op0, x86_imm* imm1)
 	x86_reg randreg1;
 	do {
 		randreg1 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while (randreg1 == Low_reg_Check(op0) || 
-			randreg1 == X86_REG_ESP			|| 
-			randreg1 == X86_REG_EBP			||
-			randreg1 == X86_REG_ESI			||
-			randreg1 == X86_REG_EDI);
+	} while (randreg1 == Low_reg_Check(op0) ||
+		randreg1 == X86_REG_ESP ||
+		randreg1 == X86_REG_EBP ||
+		randreg1 == X86_REG_ESI ||
+		randreg1 == X86_REG_EDI);
 
 	auto rand1 = to_asmjit_reg(randreg1);
-	
+
 	a.pushfd();
 	a.push(rand1);
 	a.mov(rand1, 0);
@@ -543,7 +543,7 @@ UINT x86Insn_Mutation::_mov_reg_mem_16_8(x86_reg op0, x86_mem* mem1)
 		randreg1 == X86_REG_ESI ||
 		randreg1 == X86_REG_EDI			//要用到8位寄存器
 		);
-	
+
 	auto rand1 = to_asmjit_reg(randreg1);
 
 
@@ -573,7 +573,7 @@ UINT x86Insn_Mutation::_mov_reg_mem_16_8(x86_reg op0, x86_mem* mem1)
 		while (scale--)
 			b.add(rand1, to_asmjit_reg(index));
 	}
-	
+
 	//WORD
 	if (mem_size == 2) {
 		//如果op0是段寄存器
@@ -624,7 +624,7 @@ UINT x86Insn_Mutation::_mov_mem_reg_16_8(x86_mem* mem0, x86_reg op1)
 		);
 
 	auto rand0 = to_asmjit_reg(randreg0);
-	
+
 
 	a.pushfd();
 	a.push(rand0);
@@ -637,9 +637,9 @@ UINT x86Insn_Mutation::_mov_mem_reg_16_8(x86_mem* mem0, x86_reg op1)
 		//如果中间调用的其他函数也用了x86::Assembler，之后就要重新声明一个x86::Assembler来用
 		x86::Assembler b(&Mut_Code);
 		//判断是否需要重定位
-		if (Re_flag) 
+		if (Re_flag)
 			b.add(rand0, temp);
-		else 
+		else
 			b.add(rand0, (UINT)disp);
 	}
 	x86::Assembler b(&Mut_Code);
@@ -668,7 +668,7 @@ UINT x86Insn_Mutation::_mov_mem_reg_16_8(x86_mem* mem0, x86_reg op1)
 	if (mem_size == 1) {
 		b.mov(byte_ptr(rand0), to_asmjit_reg(op1));
 	}
-	
+
 
 	b.pop(rand0);
 	b.popfd();
@@ -684,13 +684,13 @@ UINT x86Insn_Mutation::_mov_mem_imm_16_8(x86_mem* mem0, x86_imm* imm1)
 	x86_reg randreg0;
 	do {
 		randreg0 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while ( 
-			randreg0 == mem0->base		|| 
-			randreg0 == mem0->index		||
-			randreg0 == X86_REG_ESP		||
-			randreg0 == X86_REG_EBP		||
-			randreg0 == X86_REG_ESI		||
-			randreg0 == X86_REG_EDI);
+	} while (
+		randreg0 == mem0->base ||
+		randreg0 == mem0->index ||
+		randreg0 == X86_REG_ESP ||
+		randreg0 == X86_REG_EBP ||
+		randreg0 == X86_REG_ESI ||
+		randreg0 == X86_REG_EDI);
 	auto rand0 = to_asmjit_reg(randreg0);
 
 
@@ -709,7 +709,7 @@ UINT x86Insn_Mutation::_mov_mem_imm_16_8(x86_mem* mem0, x86_imm* imm1)
 	x86::Assembler b(&Mut_Code);
 	b.pop(rand0);
 	b.popfd();
-	
+
 
 	return mov_mem_imm_16_8;
 }
@@ -951,7 +951,7 @@ UINT x86Insn_Mutation::_add_reg_mem(x86_reg op0, x86_mem* mem1)
 	auto rand0 = to_asmjit_reg(randreg0);
 
 
-	
+
 	a.push(rand1);
 	a.mov(rand1, 0);
 	a.pushfd();
@@ -981,19 +981,19 @@ UINT x86Insn_Mutation::_add_reg_mem(x86_reg op0, x86_mem* mem1)
 
 	b.push(rand0);
 	b.mov(rand0, 0);
-	
+
 	b.pushfd();
 	b.mov(Low_reg(randreg0, ax), word_ptr(rand1, 2));
 	b.rcl(rand0, 0x10);
 	b.mov(Low_reg(randreg0, ax), ptr(rand1));
 	b.popfd();
-	
+
 	//把rand0 add 给op0
 	b.add(to_asmjit_reg(op0), rand0);
 
 	b.pop(rand0);
 	b.pop(rand1);
-	
+
 
 	return add_reg_mem;
 }
@@ -1073,7 +1073,7 @@ UINT x86Insn_Mutation::_add_mem_reg(x86_mem* mem0, x86_reg op1)
 
 	c.pop(rand1);
 	c.pop(rand0);
-	
+
 	return add_mem_reg;
 }
 //mem只支持4字节大小（不支持esp）
@@ -1093,13 +1093,13 @@ UINT x86Insn_Mutation::_add_mem_imm(x86_mem* mem0, x86_imm* imm1)
 	_add_mem_reg(mem0, randreg0);
 	x86::Assembler b(&Mut_Code);
 	b.pop(rand0);
-	
+
 
 	return add_mem_imm;
 }
 //仅做x16和x8代码的兼容
 UINT x86Insn_Mutation::_add_reg_reg_16_8(x86_reg op0, x86_reg op1)
-{	
+{
 	x86::Assembler a(&Mut_Code);
 	//add指令无法对段寄存器操作，不考虑
 	/*
@@ -1140,14 +1140,14 @@ UINT x86Insn_Mutation::_add_reg_imm_16_8(x86_reg op0, x86_imm* imm1)
 	do {
 		randreg1 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
 	} while (randreg1 == Low_reg_Check(op0) ||
-			randreg1 == X86_REG_ESP			||
-			randreg1 == X86_REG_EBP			||
-			randreg1 == X86_REG_ESI			||
-			randreg1 == X86_REG_EDI);
+		randreg1 == X86_REG_ESP ||
+		randreg1 == X86_REG_EBP ||
+		randreg1 == X86_REG_ESI ||
+		randreg1 == X86_REG_EDI);
 
 	auto rand1 = to_asmjit_reg(randreg1);
 
-	
+
 	a.push(rand1);
 	a.mov(rand1, 0);
 	//x16
@@ -1165,7 +1165,7 @@ UINT x86Insn_Mutation::_add_reg_imm_16_8(x86_reg op0, x86_imm* imm1)
 		a.add(to_asmjit_reg(op0), Low_reg(randreg1, al));
 	}
 	a.pop(rand1);
-	
+
 
 	return add_reg_imm_16_8;
 }
@@ -1321,11 +1321,11 @@ UINT x86Insn_Mutation::_add_mem_imm_16_8(x86_mem* mem0, x86_imm* imm1)
 	do {
 		randreg0 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
 	} while (randreg0 == X86_REG_ESP ||
-			randreg0 == X86_REG_EBP ||
-			randreg0 == X86_REG_ESI ||
-			randreg0 == X86_REG_EDI || 
-			randreg0 == mem0->base || 
-			randreg0 == mem0->index);
+		randreg0 == X86_REG_EBP ||
+		randreg0 == X86_REG_ESI ||
+		randreg0 == X86_REG_EDI ||
+		randreg0 == mem0->base ||
+		randreg0 == mem0->index);
 	auto rand0 = to_asmjit_reg(randreg0);
 
 
@@ -1342,7 +1342,7 @@ UINT x86Insn_Mutation::_add_mem_imm_16_8(x86_mem* mem0, x86_imm* imm1)
 	}
 	x86::Assembler b(&Mut_Code);
 	b.pop(rand0);
-	
+
 
 	return add_mem_imm_16_8;
 }
@@ -1477,7 +1477,7 @@ UINT x86Insn_Mutation::_sub_reg_reg(x86_reg op0, x86_reg op1)
 	x86::Assembler a(&Mut_Code);
 	if (Check_Reg(op0) == false || Check_Reg(op1) == false)
 		throw "传入的reg错误";
-	
+
 	x86_reg regs[] = { X86_REG_EAX, X86_REG_EBX, X86_REG_ECX, X86_REG_EDX, X86_REG_EBP, X86_REG_ESP, X86_REG_ESI, X86_REG_EDI };
 	x86_reg randreg1;
 	do {
@@ -1772,11 +1772,11 @@ UINT x86Insn_Mutation::_sub_reg_imm_16_8(x86_reg op0, x86_imm* imm1)
 	x86_reg randreg1;
 	do {
 		randreg1 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while (randreg1 == Low_reg_Check(op0) || 
-			randreg1 == X86_REG_ESP			||
-			randreg1 == X86_REG_EBP			||
-			randreg1 == X86_REG_ESI			||
-			randreg1 == X86_REG_EDI);
+	} while (randreg1 == Low_reg_Check(op0) ||
+		randreg1 == X86_REG_ESP ||
+		randreg1 == X86_REG_EBP ||
+		randreg1 == X86_REG_ESI ||
+		randreg1 == X86_REG_EDI);
 
 	auto rand1 = to_asmjit_reg(randreg1);
 
@@ -1954,12 +1954,12 @@ UINT x86Insn_Mutation::_sub_mem_imm_16_8(x86_mem* mem0, x86_imm* imm1)
 	do {
 		randreg0 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
 	} while (
-			randreg0 == mem0->base	|| 
-			randreg0 == mem0->index	||
-			randreg0 == X86_REG_ESP ||
-			randreg0 == X86_REG_EBP ||
-			randreg0 == X86_REG_ESI ||
-			randreg0 == X86_REG_EDI);
+		randreg0 == mem0->base ||
+		randreg0 == mem0->index ||
+		randreg0 == X86_REG_ESP ||
+		randreg0 == X86_REG_EBP ||
+		randreg0 == X86_REG_ESI ||
+		randreg0 == X86_REG_EDI);
 	auto rand0 = to_asmjit_reg(randreg0);
 
 
@@ -2405,11 +2405,11 @@ UINT x86Insn_Mutation::_xor_reg_imm_16_8(x86_reg op0, x86_imm* imm1)
 	x86_reg randreg1;
 	do {
 		randreg1 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while (randreg1 == Low_reg_Check(op0) || 
-			randreg1 == X86_REG_ESP			||
-			randreg1 == X86_REG_EBP			||
-			randreg1 == X86_REG_ESI			||
-			randreg1 == X86_REG_EDI);
+	} while (randreg1 == Low_reg_Check(op0) ||
+		randreg1 == X86_REG_ESP ||
+		randreg1 == X86_REG_EBP ||
+		randreg1 == X86_REG_ESI ||
+		randreg1 == X86_REG_EDI);
 
 	auto rand1 = to_asmjit_reg(randreg1);
 
@@ -2586,12 +2586,12 @@ UINT x86Insn_Mutation::_xor_mem_imm_16_8(x86_mem* mem0, x86_imm* imm1)
 	x86_reg randreg0;
 	do {
 		randreg0 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while (randreg0 == mem0->base || 
-			randreg0 == mem0->index	||
-			randreg0 == X86_REG_ESP ||
-			randreg0 == X86_REG_EBP ||
-			randreg0 == X86_REG_ESI ||
-			randreg0 == X86_REG_EDI);
+	} while (randreg0 == mem0->base ||
+		randreg0 == mem0->index ||
+		randreg0 == X86_REG_ESP ||
+		randreg0 == X86_REG_EBP ||
+		randreg0 == X86_REG_ESI ||
+		randreg0 == X86_REG_EDI);
 	auto rand0 = to_asmjit_reg(randreg0);
 
 
@@ -2743,7 +2743,7 @@ UINT x86Insn_Mutation::_and_reg_reg(x86_reg op0, x86_reg op1)
 	x86::Assembler a(&Mut_Code);
 	if (Check_Reg(op0) == false || Check_Reg(op1) == false)
 		throw "传入的reg错误";
-	
+
 	x86_reg regs[] = { X86_REG_EAX, X86_REG_EBX, X86_REG_ECX, X86_REG_EDX, X86_REG_EBP, X86_REG_ESP, X86_REG_ESI, X86_REG_EDI };
 	x86_reg randreg1;
 	do {
@@ -3037,11 +3037,11 @@ UINT x86Insn_Mutation::_and_reg_imm_16_8(x86_reg op0, x86_imm* imm1)
 	x86_reg randreg1;
 	do {
 		randreg1 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while (randreg1 == Low_reg_Check(op0) || 
-			randreg1 == X86_REG_ESP			||
-			randreg1 == X86_REG_EBP			||
-			randreg1 == X86_REG_ESI			||
-			randreg1 == X86_REG_EDI);
+	} while (randreg1 == Low_reg_Check(op0) ||
+		randreg1 == X86_REG_ESP ||
+		randreg1 == X86_REG_EBP ||
+		randreg1 == X86_REG_ESI ||
+		randreg1 == X86_REG_EDI);
 
 	auto rand1 = to_asmjit_reg(randreg1);
 
@@ -3218,12 +3218,12 @@ UINT x86Insn_Mutation::_and_mem_imm_16_8(x86_mem* mem0, x86_imm* imm1)
 	x86_reg randreg0;
 	do {
 		randreg0 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while (randreg0 == mem0->base || 
-			randreg0 == mem0->index || 
-			randreg0 == X86_REG_ESP ||
-			randreg0 == X86_REG_EBP ||
-			randreg0 == X86_REG_ESI ||
-			randreg0 == X86_REG_EDI);
+	} while (randreg0 == mem0->base ||
+		randreg0 == mem0->index ||
+		randreg0 == X86_REG_ESP ||
+		randreg0 == X86_REG_EBP ||
+		randreg0 == X86_REG_ESI ||
+		randreg0 == X86_REG_EDI);
 	auto rand0 = to_asmjit_reg(randreg0);
 
 
@@ -3669,11 +3669,11 @@ UINT x86Insn_Mutation::_or_reg_imm_16_8(x86_reg op0, x86_imm* imm1)
 	x86_reg randreg1;
 	do {
 		randreg1 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while (randreg1 == Low_reg_Check(op0) || 
-			randreg1 == X86_REG_ESP			||
-			randreg1 == X86_REG_EBP			||
-			randreg1 == X86_REG_ESI			||
-			randreg1 == X86_REG_EDI);
+	} while (randreg1 == Low_reg_Check(op0) ||
+		randreg1 == X86_REG_ESP ||
+		randreg1 == X86_REG_EBP ||
+		randreg1 == X86_REG_ESI ||
+		randreg1 == X86_REG_EDI);
 
 	auto rand1 = to_asmjit_reg(randreg1);
 
@@ -3850,12 +3850,12 @@ UINT x86Insn_Mutation::_or_mem_imm_16_8(x86_mem* mem0, x86_imm* imm1)
 	x86_reg randreg0;
 	do {
 		randreg0 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while (randreg0 == mem0->base || 
-			randreg0 == mem0->index || 
-			randreg0 == X86_REG_ESP ||
-			randreg0 == X86_REG_EBP ||
-			randreg0 == X86_REG_ESI ||
-			randreg0 == X86_REG_EDI);
+	} while (randreg0 == mem0->base ||
+		randreg0 == mem0->index ||
+		randreg0 == X86_REG_ESP ||
+		randreg0 == X86_REG_EBP ||
+		randreg0 == X86_REG_ESI ||
+		randreg0 == X86_REG_EDI);
 	auto rand0 = to_asmjit_reg(randreg0);
 
 
@@ -3920,7 +3920,7 @@ UINT x86Insn_Mutation::_rcl_reg_imm(x86_reg op0, x86_imm* imm1)
 	auto rand1 = to_asmjit_reg(randreg1);
 	auto reg_op0 = to_asmjit_reg(op0);
 	UINT randimm1 = rand() % (imm_value + 1);
-	
+
 
 	a.push(rand1);
 	a.mov(rand1, reg_op0);
@@ -4115,7 +4115,7 @@ UINT x86Insn_Mutation::_lea_reg_mem(x86_reg op0, x86_mem* mem1)
 	_mov_reg_reg(randreg0, randreg1);
 	_mov_reg_reg(op0, randreg0);
 	x86::Assembler c(&Mut_Code);
-	
+
 	c.pop(rand0);
 	c.pop(rand1);
 	c.popfd();
@@ -4137,9 +4137,9 @@ UINT x86Insn_Mutation::_lea_reg_mem_16(x86_reg op0, x86_mem* mem1)
 	//如果mem出现了16位寄存器(bx,bp,si,di)，直接当做未知指令
 	if (base != X86_REG_INVALID && Check_Reg(base) == false)
 		return -1;
-	if (index != X86_REG_INVALID && Check_Reg(index) == false) 
+	if (index != X86_REG_INVALID && Check_Reg(index) == false)
 		return -1;
-		
+
 
 	x86_reg regs[] = { X86_REG_EAX, X86_REG_EBX, X86_REG_ECX, X86_REG_EDX, X86_REG_EBP, X86_REG_ESP, X86_REG_ESI, X86_REG_EDI };
 	x86_reg randreg1;
@@ -4189,7 +4189,7 @@ UINT x86Insn_Mutation::_lea_reg_mem_16(x86_reg op0, x86_mem* mem1)
 	if (mem_size == 2) {
 		b.mov(to_asmjit_reg(op0), Low_reg(randreg1, ax));
 	}
-	
+
 
 	b.pop(rand1);
 	b.popfd();
@@ -4622,11 +4622,11 @@ UINT x86Insn_Mutation::_cmp_reg_imm_16_8(x86_reg op0, x86_imm* imm1)
 	x86_reg randreg1;
 	do {
 		randreg1 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while (randreg1 == Low_reg_Check(op0) || 
-			randreg1 == X86_REG_ESP			||
-			randreg1 == X86_REG_EBP			||
-			randreg1 == X86_REG_ESI			||
-			randreg1 == X86_REG_EDI);
+	} while (randreg1 == Low_reg_Check(op0) ||
+		randreg1 == X86_REG_ESP ||
+		randreg1 == X86_REG_EBP ||
+		randreg1 == X86_REG_ESI ||
+		randreg1 == X86_REG_EDI);
 
 	auto rand1 = to_asmjit_reg(randreg1);
 
@@ -4803,12 +4803,12 @@ UINT x86Insn_Mutation::_cmp_mem_imm_16_8(x86_mem* mem0, x86_imm* imm1)
 	x86_reg randreg0;
 	do {
 		randreg0 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while (randreg0 == mem0->base || 
-			randreg0 == mem0->index || 
-			randreg0 == X86_REG_ESP ||
-			randreg0 == X86_REG_EBP ||
-			randreg0 == X86_REG_ESI ||
-			randreg0 == X86_REG_EDI);
+	} while (randreg0 == mem0->base ||
+		randreg0 == mem0->index ||
+		randreg0 == X86_REG_ESP ||
+		randreg0 == X86_REG_EBP ||
+		randreg0 == X86_REG_ESI ||
+		randreg0 == X86_REG_EDI);
 	auto rand0 = to_asmjit_reg(randreg0);
 
 
@@ -5143,11 +5143,11 @@ UINT x86Insn_Mutation::_test_reg_imm_16_8(x86_reg op0, x86_imm* imm1)
 	x86_reg randreg1;
 	do {
 		randreg1 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while (randreg1 == Low_reg_Check(op0) || 
-			randreg1 == X86_REG_ESP			||
-			randreg1 == X86_REG_EBP			||
-			randreg1 == X86_REG_ESI			||
-			randreg1 == X86_REG_EDI);
+	} while (randreg1 == Low_reg_Check(op0) ||
+		randreg1 == X86_REG_ESP ||
+		randreg1 == X86_REG_EBP ||
+		randreg1 == X86_REG_ESI ||
+		randreg1 == X86_REG_EDI);
 
 	auto rand1 = to_asmjit_reg(randreg1);
 
@@ -5253,12 +5253,12 @@ UINT x86Insn_Mutation::_test_mem_imm_16_8(x86_mem* mem0, x86_imm* imm1)
 	x86_reg randreg0;
 	do {
 		randreg0 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
-	} while (randreg0 == mem0->base || 
-			randreg0 == mem0->index || 
-			randreg0 == X86_REG_ESP ||
-			randreg0 == X86_REG_EBP ||
-			randreg0 == X86_REG_ESI ||
-			randreg0 == X86_REG_EDI);
+	} while (randreg0 == mem0->base ||
+		randreg0 == mem0->index ||
+		randreg0 == X86_REG_ESP ||
+		randreg0 == X86_REG_EBP ||
+		randreg0 == X86_REG_ESI ||
+		randreg0 == X86_REG_EDI);
 	auto rand0 = to_asmjit_reg(randreg0);
 
 
@@ -5297,7 +5297,7 @@ UINT x86Insn_Mutation::_push()
 	//先判断是否是x16或x8代码
 	if (x86->operands[0].size != 4) {
 		//push reg_16
-		if (x86->operands[0].type == X86_OP_REG) 
+		if (x86->operands[0].type == X86_OP_REG)
 			return(_push_reg_16(x86->operands[0].reg));
 		//push mem_16
 		if (x86->operands[0].type == X86_OP_MEM) {
@@ -5355,28 +5355,28 @@ UINT x86Insn_Mutation::_push_reg(x86_reg op0)
 	do {
 		randreg1 = regs[rand() % (sizeof(regs) / sizeof(regs[0]))];
 	} while (randreg1 == op0 || randreg1 == X86_REG_ESP || randreg1 == randreg0);
-	
+
 	auto rand0 = to_asmjit_reg(randreg0);
 	auto rand1 = to_asmjit_reg(randreg1);
 	auto reg_op0 = to_asmjit_reg(op0);
 	mem.base = randreg1;
 
-	
+
 	a.push(rand1);						//提前开一个空间，留给[esp-4]赋值用的
 	a.pushfd();
 	a.push(rand0);
 	a.push(rand1);
-	
+
 	a.lea(rand1, ptr(x86::esp, 16));	//rand1为esp
 	a.mov(rand0, reg_op0);
 	a.sub(rand1, 4);
 	_mov_mem_reg(&mem, randreg0);		//mov [rand1],rand0
-	
+
 	x86::Assembler b(&Mut_Code);
 	b.pop(rand1);
 	b.pop(rand0);
 	b.popfd();
-	
+
 	return push_reg;
 }
 
@@ -5611,7 +5611,7 @@ UINT x86Insn_Mutation::_pop_reg(x86_reg op0)
 	auto reg_op0 = to_asmjit_reg(op0);
 	mem.base = randreg1;
 
-	
+
 	a.pushfd();
 	a.push(rand0);
 	a.push(rand1);
@@ -5718,7 +5718,7 @@ UINT x86Insn_Mutation::_pop_mem_16(x86_mem* mem0)
 	a.mov(rand0, 0);
 
 	a.lea(rand1, ptr(x86::esp, 12));				//rand1为esp
-	_mov_reg_mem_16_8(Low_reg_2(randreg0,ax), &mem);//mov rand0_ax,[rand1]
+	_mov_reg_mem_16_8(Low_reg_2(randreg0, ax), &mem);//mov rand0_ax,[rand1]
 	_mov_mem_reg_16_8(mem0, Low_reg_2(randreg0, ax));//mov [mem0],rand0_ax
 
 	x86::Assembler b(&Mut_Code);
@@ -5796,7 +5796,7 @@ UINT x86Insn_Mutation::_call_imm(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -5948,7 +5948,7 @@ UINT x86Insn_Mutation::_call_imm(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -6041,10 +6041,10 @@ UINT x86Insn_Mutation::_call_mem(x86_mem* mem0)
 		randreg0 == X86_REG_ESP ||
 		randreg0 == X86_REG_EBP ||
 		randreg0 == X86_REG_ESI ||
-		randreg0 == X86_REG_EDI	||		//要用到8位寄存器
+		randreg0 == X86_REG_EDI ||		//要用到8位寄存器
 		randreg0 == X86_REG_EAX			//要转换成call eax，所以不能是eax
 		);
-	
+
 	auto rand0 = to_asmjit_reg(randreg0);
 
 	a.pushfd();
@@ -6169,49 +6169,49 @@ UINT x86Insn_Mutation::_jcc_jmp()
 	jcc.Target_JumpAddr = (DWORD)x86->operands[0].imm;
 	if (strcmp(insn.mnemonic, "je") == 0)
 		return(_je(&jcc));
-	if (strcmp(insn.mnemonic, "jne") == 0) 
+	if (strcmp(insn.mnemonic, "jne") == 0)
 		return(_jne(&jcc));
-	if (strcmp(insn.mnemonic, "ja") == 0) 
+	if (strcmp(insn.mnemonic, "ja") == 0)
 		return(_ja(&jcc));
-	if (strcmp(insn.mnemonic, "jae") == 0) 
+	if (strcmp(insn.mnemonic, "jae") == 0)
 		return(_jae(&jcc));
-	if (strcmp(insn.mnemonic, "jb") == 0) 
+	if (strcmp(insn.mnemonic, "jb") == 0)
 		return(_jb(&jcc));
-	if (strcmp(insn.mnemonic, "jbe") == 0) 
+	if (strcmp(insn.mnemonic, "jbe") == 0)
 		return(_jbe(&jcc));
-	if (strcmp(insn.mnemonic, "jc") == 0) 
+	if (strcmp(insn.mnemonic, "jc") == 0)
 		return(_jc(&jcc));
-	if (strcmp(insn.mnemonic, "jecxz") == 0) 
+	if (strcmp(insn.mnemonic, "jecxz") == 0)
 		return(_jecxz(&jcc));
-	if (strcmp(insn.mnemonic, "jg") == 0) 
+	if (strcmp(insn.mnemonic, "jg") == 0)
 		return(_jg(&jcc));
-	if (strcmp(insn.mnemonic, "jge") == 0) 
+	if (strcmp(insn.mnemonic, "jge") == 0)
 		return(_jge(&jcc));
-	if (strcmp(insn.mnemonic, "jl") == 0) 
+	if (strcmp(insn.mnemonic, "jl") == 0)
 		return(_jl(&jcc));
-	if (strcmp(insn.mnemonic, "jle") == 0) 
+	if (strcmp(insn.mnemonic, "jle") == 0)
 		return(_jle(&jcc));
-	if (strcmp(insn.mnemonic, "jna") == 0) 
+	if (strcmp(insn.mnemonic, "jna") == 0)
 		return(_jna(&jcc));
-	if (strcmp(insn.mnemonic, "jnae") == 0) 
+	if (strcmp(insn.mnemonic, "jnae") == 0)
 		return(_jnae(&jcc));
-	if (strcmp(insn.mnemonic, "jnb") == 0) 
+	if (strcmp(insn.mnemonic, "jnb") == 0)
 		return(_jnb(&jcc));
-	if (strcmp(insn.mnemonic, "jnbe") == 0) 
+	if (strcmp(insn.mnemonic, "jnbe") == 0)
 		return(_jnbe(&jcc));
-	if (strcmp(insn.mnemonic, "jnc") == 0) 
+	if (strcmp(insn.mnemonic, "jnc") == 0)
 		return(_jnc(&jcc));
-	if (strcmp(insn.mnemonic, "jng") == 0) 
+	if (strcmp(insn.mnemonic, "jng") == 0)
 		return(_jng(&jcc));
-	if (strcmp(insn.mnemonic, "jnge") == 0) 
+	if (strcmp(insn.mnemonic, "jnge") == 0)
 		return(_jnge(&jcc));
-	if (strcmp(insn.mnemonic, "jnl") == 0) 
+	if (strcmp(insn.mnemonic, "jnl") == 0)
 		return(_jnl(&jcc));
-	if (strcmp(insn.mnemonic, "jnle") == 0) 
+	if (strcmp(insn.mnemonic, "jnle") == 0)
 		return(_jnle(&jcc));
-	if (strcmp(insn.mnemonic, "jno") == 0) 
+	if (strcmp(insn.mnemonic, "jno") == 0)
 		return(_jno(&jcc));
-	if (strcmp(insn.mnemonic, "jnp") == 0) 
+	if (strcmp(insn.mnemonic, "jnp") == 0)
 		return(_jnp(&jcc));
 	if (strcmp(insn.mnemonic, "jns") == 0)
 		return(_jns(&jcc));
@@ -6268,7 +6268,7 @@ UINT x86Insn_Mutation::_jmp_imm(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -6373,7 +6373,7 @@ UINT x86Insn_Mutation::_jmp_imm(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -6511,7 +6511,7 @@ UINT x86Insn_Mutation::_jmp_mem(x86_mem* mem0)
 		while (scale--)
 			b.add(rand0, to_asmjit_reg(index));
 	}
-	
+
 	b.push(rand1);						//开一个空间
 
 	b.mov(rand1, ptr(x86::esp, 4));
@@ -6551,7 +6551,7 @@ UINT x86Insn_Mutation::_je(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -6658,7 +6658,7 @@ UINT x86Insn_Mutation::_je(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -6690,7 +6690,7 @@ UINT x86Insn_Mutation::_je(x86_jcc* jcc0)
 
 		a.pushfd();							//eflags赋值给rand0
 		a.pop(rand0);
-		if (rand() & 1){
+		if (rand() & 1) {
 			//随机选jns，jnp
 			if (rand() & 1) {
 				a.jns(L1);					//这个跳转不确定会不会跳L1
@@ -6752,7 +6752,7 @@ UINT x86Insn_Mutation::_jne(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -6859,7 +6859,7 @@ UINT x86Insn_Mutation::_jne(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -6953,7 +6953,7 @@ UINT x86Insn_Mutation::_ja(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -7070,7 +7070,7 @@ UINT x86Insn_Mutation::_ja(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -7164,7 +7164,7 @@ UINT x86Insn_Mutation::_jae(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -7271,7 +7271,7 @@ UINT x86Insn_Mutation::_jae(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -7365,7 +7365,7 @@ UINT x86Insn_Mutation::_jb(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -7472,7 +7472,7 @@ UINT x86Insn_Mutation::_jb(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -7566,7 +7566,7 @@ UINT x86Insn_Mutation::_jbe(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -7646,7 +7646,7 @@ UINT x86Insn_Mutation::_jbe(x86_jcc* jcc0)
 
 			a.rcr(rand0, eflag_offset);	//ZF标志位移到CF
 			a.or_(rand0, rand1);		//rand0的ZF和rand1的CF进行or运算，再对其结果进行xor 1
-			a.xor_(rand0, 1);			
+			a.xor_(rand0, 1);
 			a.rcl(rand0, 7);			//从CF移7位到SF
 
 			a.and_(rand0, 0xEFF);		//将TF变成0，避免误开启调试模式导致崩溃  0xEFF=1110 1111 1111
@@ -7685,7 +7685,7 @@ UINT x86Insn_Mutation::_jbe(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -7779,7 +7779,7 @@ UINT x86Insn_Mutation::_jc(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -7886,7 +7886,7 @@ UINT x86Insn_Mutation::_jc(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -7981,7 +7981,7 @@ UINT x86Insn_Mutation::_jecxz(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -7994,7 +7994,7 @@ UINT x86Insn_Mutation::_jecxz(x86_jcc* jcc0)
 
 		a.pushfd();							//保存eflags
 		a.cmp(x86::ecx, 0);					//如果ecx==0，就jmp
-		a.jne(L0);							
+		a.jne(L0);
 		a.popfd();
 		a.jmp(Jcc_ActuAddr(Target_JumpAddr));
 
@@ -8066,7 +8066,7 @@ UINT x86Insn_Mutation::_jecxz(x86_jcc* jcc0)
 			a.pushfd();
 			a.pop(rand0);
 			a.rcr(rand0, eflag_offset);	//ZF标志位移到CF
-			a.xor_(rand0, 1);			
+			a.xor_(rand0, 1);
 			a.rcl(rand0, 7);			//从CF移7位到SF
 
 			a.and_(rand0, 0xEFF);		//将TF变成0，避免误开启调试模式导致崩溃  0xEFF=1110 1111 1111
@@ -8077,7 +8077,7 @@ UINT x86Insn_Mutation::_jecxz(x86_jcc* jcc0)
 		}
 		else {
 			a.push(rand0);
-			
+
 			a.cmp(x86::ecx, 0);
 			a.pushfd();
 			a.pop(rand0);
@@ -8103,7 +8103,7 @@ UINT x86Insn_Mutation::_jecxz(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -8197,7 +8197,7 @@ UINT x86Insn_Mutation::_jg(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -8322,7 +8322,7 @@ UINT x86Insn_Mutation::_jg(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -8416,7 +8416,7 @@ UINT x86Insn_Mutation::_jge(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -8535,7 +8535,7 @@ UINT x86Insn_Mutation::_jge(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -8629,7 +8629,7 @@ UINT x86Insn_Mutation::_jl(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -8750,7 +8750,7 @@ UINT x86Insn_Mutation::_jl(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -8844,7 +8844,7 @@ UINT x86Insn_Mutation::_jle(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -8938,7 +8938,7 @@ UINT x86Insn_Mutation::_jle(x86_jcc* jcc0)
 			a.pop(rand1);
 			a.jns(Jump_Success);		//跳转成功走Jump_Success
 		}
-		else {							
+		else {
 			a.push(rand1);
 			a.push(rand0);
 			a.mov(rand1, rand0);		//eflags赋给rand1
@@ -8971,7 +8971,7 @@ UINT x86Insn_Mutation::_jle(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -9065,7 +9065,7 @@ UINT x86Insn_Mutation::_jna(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -9184,7 +9184,7 @@ UINT x86Insn_Mutation::_jna(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -9278,7 +9278,7 @@ UINT x86Insn_Mutation::_jnae(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -9385,7 +9385,7 @@ UINT x86Insn_Mutation::_jnae(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -9479,7 +9479,7 @@ UINT x86Insn_Mutation::_jnb(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -9586,7 +9586,7 @@ UINT x86Insn_Mutation::_jnb(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -9680,7 +9680,7 @@ UINT x86Insn_Mutation::_jnbe(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -9797,7 +9797,7 @@ UINT x86Insn_Mutation::_jnbe(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -9891,7 +9891,7 @@ UINT x86Insn_Mutation::_jnc(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -9998,7 +9998,7 @@ UINT x86Insn_Mutation::_jnc(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -10092,7 +10092,7 @@ UINT x86Insn_Mutation::_jng(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -10219,7 +10219,7 @@ UINT x86Insn_Mutation::_jng(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -10313,7 +10313,7 @@ UINT x86Insn_Mutation::_jnge(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -10434,7 +10434,7 @@ UINT x86Insn_Mutation::_jnge(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -10528,7 +10528,7 @@ UINT x86Insn_Mutation::_jnl(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -10647,7 +10647,7 @@ UINT x86Insn_Mutation::_jnl(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -10741,7 +10741,7 @@ UINT x86Insn_Mutation::_jnle(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -10866,7 +10866,7 @@ UINT x86Insn_Mutation::_jnle(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -10960,7 +10960,7 @@ UINT x86Insn_Mutation::_jno(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -11067,7 +11067,7 @@ UINT x86Insn_Mutation::_jno(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -11161,7 +11161,7 @@ UINT x86Insn_Mutation::_jnp(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -11268,7 +11268,7 @@ UINT x86Insn_Mutation::_jnp(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -11362,7 +11362,7 @@ UINT x86Insn_Mutation::_jns(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -11469,7 +11469,7 @@ UINT x86Insn_Mutation::_jns(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -11563,7 +11563,7 @@ UINT x86Insn_Mutation::_jnz(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -11670,7 +11670,7 @@ UINT x86Insn_Mutation::_jnz(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -11764,7 +11764,7 @@ UINT x86Insn_Mutation::_jo(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -11871,7 +11871,7 @@ UINT x86Insn_Mutation::_jo(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -11965,7 +11965,7 @@ UINT x86Insn_Mutation::_jp(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -12072,7 +12072,7 @@ UINT x86Insn_Mutation::_jp(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -12166,7 +12166,7 @@ UINT x86Insn_Mutation::_jpe(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -12273,7 +12273,7 @@ UINT x86Insn_Mutation::_jpe(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -12367,7 +12367,7 @@ UINT x86Insn_Mutation::_jpo(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -12474,7 +12474,7 @@ UINT x86Insn_Mutation::_jpo(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -12568,7 +12568,7 @@ UINT x86Insn_Mutation::_js(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -12675,7 +12675,7 @@ UINT x86Insn_Mutation::_js(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;
@@ -12769,7 +12769,7 @@ UINT x86Insn_Mutation::_jz(x86_jcc* jcc0)
 	//判断目标跳转地址是不是在Mutation保护标志范围内
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//在保护范围
-		if (Target_JumpAddr >= (DWORD)iter->Start && Target_JumpAddr <= (DWORD)iter->End) {
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
 			flag = true;
 			break;
 		}
@@ -12876,7 +12876,7 @@ UINT x86Insn_Mutation::_jz(x86_jcc* jcc0)
 		//----------------------------------------------------------------------------------------------------------------
 		//2.1判断是否已经生成目标地址
 		bool flag_2 = false;
-		for (auto iter = code_section.begin(); iter != code_section.end(); iter++) {
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
 			//已经生成，修改目标跳转地址
 			if (Target_JumpAddr == iter->Raw_CodeAddr) {
 				flag_2 = true;

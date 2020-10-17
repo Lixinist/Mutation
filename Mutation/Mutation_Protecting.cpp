@@ -11,23 +11,40 @@ Mutation::Mutation()
 {
 	InitValue();
 }
-Mutation::~Mutation(){}
+Mutation::~Mutation() {}
 void Mutation::InitValue()
 {
-	
+
 }
 x86Insn_Mutation::x86Insn_Mutation()
 {
 	InitValue();
+
+	//开Final空间
+	if (Final_MutMemory == nullptr)
+	{
+		Final_MutMemory = VirtualAlloc(NULL, memory_size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+		FinalMem_Size = memory_size;
+		FinalRemainMem_Size = memory_size;
+		if (Final_MutMemory == NULL)
+			MessageBox(NULL, _T("Final_MutMemory申请空间失败"), NULL, NULL);
+	}
 }
-x86Insn_Mutation::~x86Insn_Mutation() {}
+x86Insn_Mutation::~x86Insn_Mutation() 
+{
+	if (Final_MutMemory == nullptr)
+		return;
+
+	VirtualFree(Final_MutMemory, 0, MEM_DECOMMIT);
+	
+}
 void x86Insn_Mutation::InitValue()
 {
-	Final_MutMemory = NULL;
+	Final_MutMemory = nullptr;
 	FinalMem_Size = 0;
 	FinalRemainMem_Size = 0;
 	Final_CodeSize = 0;
-	again_flag = false;
+	SingMut_Sec = { 0 };
 }
 
 
@@ -36,9 +53,11 @@ void x86Insn_Mutation::InitValue()
 void Mutation::Start(CString filepath)
 {
 	//CPE	objPE;
+	bool	again_flag = false;
 	x86Insn_Mutation code;
+	x86Insn_Mutation_again code_again;
 	vector<Mark> Mark;
-	
+
 	if (filepath.IsEmpty()) {
 		MessageBox(NULL, _T("未输入文件路径！"), NULL, NULL);
 		return;
@@ -55,24 +74,38 @@ void Mutation::Start(CString filepath)
 		//delete[] objPE.m_pFileBuf;
 		return;
 	}
-	
-	//2.开始进行变异
-	code.objPE = this->objPE;								//objPE的初始化不适合放在构造函数，所以直接赋值过去
-	code.Mut_Mark = this->Mut_Mark;
-	Start_Mutation(code);									//不能写objMut.Start_Mutation()
 
+	//2.开始进行变异
+	//继承objPE和Mut_Mark数据
+	code = *this;
+	//code.objPE = this->objPE;								//objPE的初始化不适合放在构造函数，所以直接赋值过去
+	//code.Mut_Mark = this->Mut_Mark;
+	code.Start_Mutation(code);									//不能写objMut.Start_Mutation()
+	////////////////////////////////////////////////////////////////////////////////////
+	//开始二次变异
+	again_flag = true;
+	code_again = code;
+	code_again.Start_Mutation(code_again);
+
+
+	////////////////////////////////////////////////////////////////////////////////////
 	//3.合并PE文件和变异代码到新的缓冲区
-	LPBYTE pFinalBuf = NULL;
+	LPBYTE pFinalBuf = nullptr;
 	DWORD dwFinalBufSize = 0;
-	objPE.MergeBuf(objPE.m_pFileBuf, objPE.m_dwImageSize,
+	if(again_flag)
+		objPE.MergeBuf(objPE.m_pFileBuf, objPE.m_dwImageSize,
+		(LPBYTE)code_again.Final_MutMemory, code_again.Final_CodeSize,
+			pFinalBuf, dwFinalBufSize);
+	else
+		objPE.MergeBuf(objPE.m_pFileBuf, objPE.m_dwImageSize,
 		(LPBYTE)code.Final_MutMemory, code.Final_CodeSize,
-		pFinalBuf, dwFinalBufSize);
+			pFinalBuf, dwFinalBufSize);
 	//4.保存文件（处理完成的缓冲区）
 	SaveFinalFile(pFinalBuf, dwFinalBufSize, filepath);
 	//5.释放资源
 	VirtualFree(objPE.m_pFileBuf, 0, MEM_DECOMMIT);
 	VirtualFree(pFinalBuf, 0, MEM_DECOMMIT);
-	VirtualFree(code.Final_MutMemory, 0, MEM_DECOMMIT);
+	//VirtualFree(code.Final_MutMemory, 0, MEM_DECOMMIT);
 	//delete[] objPE.m_pFileBuf;
 	//delete[] pFinalBuf;
 	//free(code.Final_MutMemory);
@@ -86,57 +119,62 @@ void Mutation::Start_Mutation(x86Insn_Mutation& code)
 
 	//初始化重定位基址
 	//code.CS_Struct.Mut_CodeStartAddr = (objPE.m_dwImageBase + objPE.m_dwImageSize);
-	//开Final空间
-	if (code.Final_MutMemory == NULL)
-	{
-		code.Final_MutMemory = VirtualAlloc(NULL, memory_size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-		code.FinalMem_Size = memory_size;
-		code.FinalRemainMem_Size = memory_size;
-		if (code.Final_MutMemory == NULL)
-			MessageBox(NULL, _T("Final_MutMemory申请空间失败"), NULL, NULL);
-	}
+	
 	//针对每一段代码进行变异
 	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
 		//start_link
-		link_jmp(1, code, objPE, iter->Start);
+		link_jmp(1, code, objPE, iter->Jmp_Start);
 		//反汇编&&变异
-		code.Disassemble(iter->Start + strlen((char*)Mutation_Start), iter->End);
+		code.Disassemble(iter->Protected_Start, iter->Protected_End, iter->Jmp_Start, iter->Jmp_End);
 		//end_link
-		link_jmp(0, code, objPE, iter->End + strlen((char*)Mutation_End));
+		link_jmp(0, code, objPE, iter->Jmp_End + strlen((char*)Mutation_End));
 		//清除该段的原代码
-		ClearCode(iter->Start + 5, iter->End + strlen((char*)Mutation_End));
+		ClearCode(iter->Jmp_Start + 5, iter->Jmp_End + strlen((char*)Mutation_End));
 	}
 }
-static csh handle;
+//static csh handle;
 //针对每段代码
-BOOL x86Insn_Mutation ::Disassemble(LPBYTE Start_Addr, LPBYTE End_Addr)
+BOOL x86Insn_Mutation::Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End, LPBYTE Jmp_Start, LPBYTE Jmp_End)
 {
-	uint64_t address = (uint64_t)Start_Addr;		//起始地址
-	cs_insn *insn;									//反汇编出的指令信息
+	uint64_t	address = (uint64_t)Protected_Start;	//起始地址
+	cs_insn		*insn;									//反汇编出的指令信息
+	Mark		Mark_Struct = { 0 };
 	BOOL result = true;
 	size_t count;
 	cs_err err = cs_open(CS_ARCH_X86, CS_MODE_32, &handle);
 	if (err) {
 		MessageBox(NULL, _T("Failed on cs_open()"), NULL, NULL);
-		printf("Failed on cs_open() with error returned: %u\n", err);
 		abort();
 	}
 
 	cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
 
 	//cs_disasm倒数第二个参数：需要解析的指令数量，0为全部
-	count = cs_disasm(handle, Start_Addr, End_Addr-Start_Addr, address, 0, &insn);
+	count = cs_disasm(handle, Protected_Start, Protected_End - Protected_Start, address, 0, &insn);
 	if (count) {
 		size_t j;
-		
+		//针对每段代码变异
 		for (j = 0; j < count; j++) {
-			//x86Insn_Mutation code;
 			this->handle = handle;
 			this->insn = insn[j];
 			this->Mutation_SingleCode();
 		}
+		//变异代码首尾地址加入vector（Protected_End不包括jmp end）
+		if (Mut_Mark_again.empty()) {
+			Mark_Struct.Jmp_Start = Jmp_Start;
+			Mark_Struct.Jmp_End = Jmp_End;
+			Mark_Struct.Protected_Start = (LPBYTE)Final_MutMemory;
+			Mark_Struct.Protected_End = (LPBYTE)(size_t)Final_MutMemory + Final_CodeSize;
+			Mut_Mark_again.push_back(Mark_Struct);
+		}		
+		else {
+			Mark_Struct.Jmp_Start = Jmp_Start;
+			Mark_Struct.Jmp_End = Jmp_End;
+			Mark_Struct.Protected_Start = Mut_Mark_again.back().Protected_End + 5;
+			Mark_Struct.Protected_End = (LPBYTE)(size_t)Final_MutMemory + Final_CodeSize;
+			Mut_Mark_again.push_back(Mark_Struct);
+		}
 
-		// free memory allocated by cs_disasm()
 		cs_free(insn, count);
 	}
 	else {
@@ -162,11 +200,11 @@ UINT x86Insn_Mutation::Mutation_SingleCode()
 	if (result == -1)
 	{
 		Resolve_UnknownInsn();
-		return result;
+		return -1;
 	}
 	//2.将单行指令的变异代码重定位后写到Final空间，并填写CodeSection结构体
 	Copy_MutCodes_to_FinalMem();
-	
+
 	//3.清除这次存入CodeHolder的代码
 	Mut_Code.reset();
 
@@ -182,7 +220,7 @@ UINT x86Insn_Mutation::Analyze_InsnType()
 	//1.先判断reg和mem中有没有esp或sp寄存器，对这种特殊情况不做变异，直接留给Resolve_UnknownInsn()处理
 	for (int i = 0; i < x86->op_count; i++) {
 		//当前op_type为reg
-		if (x86->operands[i].type == X86_OP_REG ) {
+		if (x86->operands[i].type == X86_OP_REG) {
 			if (x86->operands[i].reg == X86_REG_ESP || x86->operands[i].reg == X86_REG_SP)
 				return -1;
 		}
@@ -263,23 +301,23 @@ UINT x86Insn_Mutation::Resolve_UnknownInsn()
 	//1.把未知指令copy过去
 	memcpy_s((void*)((size_t)Final_MutMemory + Final_CodeSize), insn.size, (void*)insn.address, insn.size);
 	//2.加入CodeSection的vector
-	CodeSection CS_Struct = { 0 };
-	CS_Struct.Raw_CodeAddr = (DWORD)insn.address;
-	CS_Struct.Mut_CodeStartAddr = (DWORD)Final_MutMemory + Final_CodeSize;
-	CS_Struct.BaseAddr = objPE.m_dwImageBase + objPE.m_dwImageSize + Final_CodeSize;
-	CS_Struct.Mut_CodeEndAddr = CS_Struct.Mut_CodeStartAddr + insn.size;
-	CS_Struct.Mut_CodeSize = insn.size;
-	code_section.push_back(CS_Struct);
-	Final_CodeSize += insn.size;	
+	SingMut_Sec = { 0 };
+	SingMut_Sec.Raw_CodeAddr = (DWORD)insn.address;
+	SingMut_Sec.Mut_CodeStartAddr = (DWORD)Final_MutMemory + Final_CodeSize;
+	SingMut_Sec.BaseAddr = objPE.m_dwImageBase + objPE.m_dwImageSize + Final_CodeSize;
+	SingMut_Sec.Mut_CodeEndAddr = SingMut_Sec.Mut_CodeStartAddr + insn.size;
+	SingMut_Sec.Mut_CodeSize = insn.size;
+	SingMut.push_back(SingMut_Sec);
+	Final_CodeSize += insn.size;
 	//3.重定位处理：
 	//如果该指令的mem的disp_size为4，可能有重定位
 	///*
 	if (mem.disp_size == 4) {
-		DealWithReloc((DWORD)insn.address + mem.disp_offset, CS_Struct.BaseAddr + mem.disp_offset);
+		DealWithReloc((DWORD)insn.address + mem.disp_offset, SingMut_Sec.BaseAddr + mem.disp_offset);
 	}
 	//如果imm的size为4，可能有重定位
 	if (imm.imm_size == 4) {
-		DealWithReloc((DWORD)insn.address + imm.imm_offset, CS_Struct.BaseAddr + imm.imm_offset);
+		DealWithReloc((DWORD)insn.address + imm.imm_offset, SingMut_Sec.BaseAddr + imm.imm_offset);
 	}
 	//*/
 	return true;
@@ -290,42 +328,67 @@ UINT x86Insn_Mutation::Copy_MutCodes_to_FinalMem()
 {
 	Mut_Code.flatten();
 	Mut_Code.resolveUnresolvedLinks();
-	CodeSection CS_Struct = { 0 };
+	SingMut_Sec = { 0 };
 	//1.填写原指令地址
-	CS_Struct.Raw_CodeAddr = (DWORD)insn.address;
+	SingMut_Sec.Raw_CodeAddr = (DWORD)insn.address;
 	//1.1填写变异代码起始地址
-	CS_Struct.Mut_CodeStartAddr = (DWORD)Final_MutMemory + Final_CodeSize;
+	SingMut_Sec.Mut_CodeStartAddr = (DWORD)Final_MutMemory + Final_CodeSize;
 	//1.2填写重定位基地址（原区段基地址+已生成的总变异代码大小）
-	CS_Struct.BaseAddr = objPE.m_dwImageBase + objPE.m_dwImageSize + Final_CodeSize;
+	SingMut_Sec.BaseAddr = objPE.m_dwImageBase + objPE.m_dwImageSize + Final_CodeSize;
 	//1.3进行重定位
-	Mut_Code.relocateToBase((uint64_t)CS_Struct.BaseAddr);
+	Mut_Code.relocateToBase((uint64_t)SingMut_Sec.BaseAddr);
 	//1.4填写变异代码块大小（重定位后再取CodeSize，CodeSize可能在重定位后变化）
-	CS_Struct.Mut_CodeSize = Mut_Code.codeSize();					
+	SingMut_Sec.Mut_CodeSize = Mut_Code.codeSize();
 	//1.5填写变异代码块尾部（下一个变异代码块的起始处）
-	CS_Struct.Mut_CodeEndAddr = CS_Struct.Mut_CodeStartAddr + CS_Struct.Mut_CodeSize;
+	SingMut_Sec.Mut_CodeEndAddr = SingMut_Sec.Mut_CodeStartAddr + SingMut_Sec.Mut_CodeSize;
 	//1.6将结构体写进vector
-	code_section.push_back(CS_Struct);
+	SingMut.push_back(SingMut_Sec);
 
 
-	//2.分析Final空间够不够装下这个变异指令
-	FinalRemainMem_Size -= CS_Struct.Mut_CodeSize;
+	//2.如果Final剩余内存装不下这个变异指令
+	FinalRemainMem_Size -= SingMut_Sec.Mut_CodeSize;
 	if (FinalRemainMem_Size < 0)
 	{
-		//创建2倍大小的空间并将原空间代码copy过来
-		void* temp = Final_MutMemory;
-		size_t temp_size = FinalMem_Size;
-		FinalMem_Size *= 2;
-		Final_MutMemory = VirtualAlloc(NULL, FinalMem_Size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-		if (Final_MutMemory == NULL)
-			MessageBox(NULL, _T("Final_MutMemory申请空间失败"), NULL, NULL);
-		memcpy_s(Final_MutMemory, FinalMem_Size, temp, temp_size);
-		VirtualFree(temp, 0, MEM_DECOMMIT);
+		Update_Mem();
 	}
 	//3.将变异代码写到Final空间
-	Mut_Code.copyFlattenedData((void*)CS_Struct.Mut_CodeStartAddr, CS_Struct.Mut_CodeSize, CodeHolder::kCopyWithPadding);
+	Mut_Code.copyFlattenedData((void*)SingMut_Sec.Mut_CodeStartAddr, SingMut_Sec.Mut_CodeSize, CodeHolder::kCopyWithPadding);
 	//3.1更新Final_CodeSize
-	Final_CodeSize += CS_Struct.Mut_CodeSize;
-	
+	Final_CodeSize += SingMut_Sec.Mut_CodeSize;
+
+	return true;
+}
+
+UINT x86Insn_Mutation::Update_Mem()
+{
+	//创建2倍大小的空间并将原空间代码copy过来
+
+	void* temp = Final_MutMemory;
+	size_t temp_size = FinalMem_Size;
+	FinalMem_Size *= 2;
+	Final_MutMemory = VirtualAlloc(NULL, FinalMem_Size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	if (Final_MutMemory == NULL)
+	{
+		MessageBox(NULL, _T("Final_MutMemory申请空间失败"), NULL, NULL);
+	}
+	memcpy_s(Final_MutMemory, FinalMem_Size, temp, temp_size);
+	FinalRemainMem_Size = FinalMem_Size - temp_size;
+	VirtualFree(temp, 0, MEM_DECOMMIT);
+
+	//更新几个vector里的需要改变的绝对地址
+	size_t differ = (size_t)Final_MutMemory - (size_t)temp;
+	for (auto c : Mut_Mark_again) {
+		c.Protected_Start += differ;
+		c.Protected_End += differ;
+	}
+	for (auto c : SingMut) {
+		c.Mut_CodeStartAddr += differ;
+		c.Mut_CodeEndAddr += differ;
+	}
+	for (auto c : Fix_Offset) {
+		c.address += differ;
+	}
+
 	return true;
 }
 
@@ -338,14 +401,14 @@ UINT x86Insn_Mutation::Copy_MutCodes_to_FinalMem()
 //寻找Mutation保护标志
 UINT Mutation::Find_MutationMark(LPBYTE pFinalBuf, DWORD size, OUT vector<Mark> *_Out_Mark)
 {
-	Mark Mark_Struct = {0};
+	Mark Mark_Struct = { 0 };
 	UINT Mark_Sum = 0;
 	LPBYTE Start_Addr = 0, End_Addr = 0;
 	if (pFinalBuf == NULL) {
 		MessageBox(NULL, _T("pFinalBuf缓冲区异常！"), NULL, NULL);
 		return 0;
 	}
-	for (DWORD Offset = 0; size - Offset > 0 ; Offset = End_Addr - pFinalBuf + 1)
+	for (DWORD Offset = 0; size - Offset > 0; Offset = End_Addr - pFinalBuf + 1)
 	{
 		Start_Addr = Find_MemoryString(pFinalBuf + Offset, size - Offset, (LPBYTE)Mutation_Start);
 		End_Addr = Find_MemoryString(pFinalBuf + Offset, size - Offset, (LPBYTE)Mutation_End);
@@ -356,8 +419,10 @@ UINT Mutation::Find_MutationMark(LPBYTE pFinalBuf, DWORD size, OUT vector<Mark> 
 			MessageBox(NULL, _T("发现错误的SDK！请检查SDK标志"), NULL, NULL);
 			return Mark_Sum;
 		}
-		Mark_Struct.Start = Start_Addr;
-		Mark_Struct.End = End_Addr;
+		Mark_Struct.Jmp_Start = Start_Addr;
+		Mark_Struct.Jmp_End = End_Addr;
+		Mark_Struct.Protected_Start = Start_Addr + strlen((char*)Mutation_Start);
+		Mark_Struct.Protected_End = End_Addr;
 		_Out_Mark->push_back(Mark_Struct);
 		Mut_Mark.push_back(Mark_Struct);
 		Mark_Sum++;
@@ -376,7 +441,7 @@ void Mutation::link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Add
 		memcpy_s(Addr + 1, 4, &data, 4);
 	}
 	else
-	//	end_link，往上跳。由于添加了代码，还要修改一些成员变量
+		//	end_link，往上跳。由于添加了代码，还要修改一些成员变量
 	{
 		//偏移 = -(整块镜像内存 - Addr + CodeSize) - 5
 		DWORD data = (DWORD)Addr - (DWORD)objPE.m_pFileBuf - objPE.m_dwImageSize - code.Final_CodeSize - 5;
@@ -390,7 +455,8 @@ void Mutation::link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Add
 void Mutation::ClearCode(LPBYTE Start_Addr, LPBYTE End_Addr)
 {
 	size_t size = End_Addr - Start_Addr;
-	memset(Start_Addr,0,size);
+	for (int i = 0; i < size; i++)
+		memset(Start_Addr + i, rand() % 256, 1);
 }
 //保存至文件
 BOOL Mutation::SaveFinalFile(LPBYTE pFinalBuf, DWORD pFinalBufSize, CString strFilePath)

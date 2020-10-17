@@ -219,6 +219,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="auxiliary_function.h" />
+    <ClInclude Include="define.h" />
     <ClInclude Include="Mutation_Protecting.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="PE.h" />
