@@ -163,7 +163,7 @@ public:
 	//修复jmp的offset
 	UINT	Fix_JmpOffset();
 	//转换jcc目标跳转地址为实际地址
-	UINT	Jcc_ActuAddr(DWORD Target_JumpAddr);
+	virtual UINT	Jcc_ActuAddr(DWORD Target_JumpAddr);
 	UINT	Update_Mem();
 	UINT	reloc();
 
@@ -174,15 +174,17 @@ public:
 class x86Insn_Mutation_again : public x86Insn_Mutation
 {
 public:
-	
+	//重写方法
+	UINT Jcc_ActuAddr(DWORD Target_JumpAddr);
 public:
+	void* old_Final_MutMemory;
 	//继承成员数据
 	x86Insn_Mutation_again& operator=(const x86Insn_Mutation& code) {
-		//Final_MutMemory = code.Final_MutMemory;
 		//FinalMem_Size = code.FinalMem_Size;
 		//FinalRemainMem_Size = code.FinalRemainMem_Size;
 		//Final_CodeSize = code.Final_CodeSize;
 		//SingMut = code.SingMut;
+		old_Final_MutMemory = code.Final_MutMemory;
 		objPE = code.objPE;
 		Fix_Offset = code.Fix_Offset;
 		Mut_Mark = code.Mut_Mark_again;

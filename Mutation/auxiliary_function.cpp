@@ -77,31 +77,24 @@ BOOL x86Insn_Mutation::DealWithReloc(DWORD DataAddr, DWORD NeedtoReloActuAddr)
 UINT x86Insn_Mutation::Fix_JmpOffset()
 {
 	UINT result = 0;
-	bool flag = false;
 	DWORD jcc_offset = 0;
-	//DWORD Target_JumpAddr = 0;
 	DWORD jcc_addr = 0;
 	uint8_t imm_offset = 0;
 	
 	//从vector中遍历 并判断 是否有jns，jnp跳转到了当前指令地址
 	for (auto c : Fix_Offset) {
 		if (c.Target_JumpAddr == insn.address) {
-			flag = true;
-			//Target_JumpAddr = c.Target_JumpAddr;
+			result = 1;
 			jcc_addr = c.address;
 			imm_offset = c.imm_offset;
-			result = 1;
-			break;
+			//让jns，jnp重定位跳向 当前指令的变异代码的地址
+			//公式： jcc_addr + imm_offset + imm_size + jcc_offset = target_addr(Final_MutMemory + Final_CodeSize)
+			jcc_offset = ((DWORD)Final_MutMemory + Final_CodeSize) - imm_offset - 4 - jcc_addr;
+			//写入jns，jnp的offset
+			memcpy_s((void*)(jcc_addr + imm_offset), 4, &jcc_offset, 4);
 		}
 	}
-	if (flag) {
-		//让jns，jnp重定位跳向 当前指令的变异代码地址
-		//公式： jcc_addr + imm_offset + imm_size + jcc_offset = target_addr(Final_MutMemory + Final_CodeSize)
-		jcc_offset = ((DWORD)Final_MutMemory + Final_CodeSize) - imm_offset - 4 - jcc_addr;
-		//写入jns，jnp的offset
-		memcpy_s((void*)(jcc_addr + imm_offset), 4, &jcc_offset, 4);
-	}
-
+	
 	return result;
 }
 
@@ -109,6 +102,10 @@ UINT x86Insn_Mutation::Fix_JmpOffset()
 UINT x86Insn_Mutation::Jcc_ActuAddr(DWORD Target_JumpAddr)
 {
 	return(Target_JumpAddr - (DWORD)objPE.m_pFileBuf + objPE.m_dwImageBase);
+}
+UINT x86Insn_Mutation_again::Jcc_ActuAddr(DWORD Target_JumpAddr)
+{
+	return(Target_JumpAddr - (DWORD)old_Final_MutMemory + (objPE.m_dwImageBase + objPE.m_dwImageSize));
 }
 //检查是否是那7个常用的寄存器（esp被排除了）。
 bool Check_Reg(x86_reg capstone_reg)

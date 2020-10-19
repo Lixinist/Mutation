@@ -5859,7 +5859,7 @@ UINT x86Insn_Mutation::_call_imm(x86_jcc* jcc0)
 
 		//Ô­call
 		a.call(Jcc_ActuAddr(Target_JumpAddr));
-
+		CodeBuffer& buffer = Mut_Code.sectionById(0)->buffer();
 
 		a.push(rand0);						//±£´ærand0¼Ä´æÆ÷
 
