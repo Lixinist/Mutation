@@ -43,7 +43,7 @@ void CPE::InitValue()
 	m_IATSectionBase	= 0;
 	m_IATSectionSize	= 0;
 
-	Raw_RelocDirsize	= 0;
+	//Raw_RelocDirsize	= 0;
 }
 
 //************************************************************
@@ -83,9 +83,10 @@ BOOL CPE::InitPE(CString strFilePath)
 
 	if (m_dwImageSize % m_dwMemAlign)
 		m_dwImageSize = (m_dwImageSize / m_dwMemAlign + 1) * m_dwMemAlign;
-	LPBYTE pFileBuf_New = (LPBYTE)VirtualAlloc(NULL, m_dwImageSize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	//这里申请2倍内存是为了方便增加重定位区段大小
+	LPBYTE pFileBuf_New = (LPBYTE)VirtualAlloc(NULL, m_dwImageSize * 2, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 	//LPBYTE pFileBuf_New = new BYTE[m_dwImageSize];
-	memset(pFileBuf_New, 0, m_dwImageSize);
+	memset(pFileBuf_New, 0, m_dwImageSize * 2);
 	//拷贝文件头
 	memcpy_s(pFileBuf_New, m_dwSizeOfHeader, m_pFileBuf, m_dwSizeOfHeader);
 	//拷贝区段
@@ -101,7 +102,9 @@ BOOL CPE::InitPE(CString strFilePath)
 	//delete[] m_pFileBuf;
 	m_pFileBuf = pFileBuf_New;
 	pFileBuf_New = NULL;
-
+	
+	//事先增加重定位区段大小
+	AddSize_RelocSection();
 	//获取PE信息
 	GetPEInfo();
 	
@@ -185,6 +188,9 @@ void CPE::GetPEInfo()
 	m_dwSizeOfHeader= m_pNtHeader->OptionalHeader.SizeOfHeaders;
 	m_dwSectionNum	= m_pNtHeader->FileHeader.NumberOfSections;
 	m_pSecHeader	= IMAGE_FIRST_SECTION(m_pNtHeader);
+	m_dwImageSize = m_pNtHeader->OptionalHeader.SizeOfImage;
+	if (m_dwImageSize % m_dwMemAlign)
+		m_dwImageSize = (m_dwImageSize / m_dwMemAlign + 1) * m_dwMemAlign;
 	m_pNtHeader->OptionalHeader.SizeOfImage = m_dwImageSize;
 
 	//保存重定位目录信息
@@ -331,9 +337,10 @@ void CPE::Find_reloc()
 }
 
 
-BOOL CPE::Add_DataToRelocDir(WORD checked_offset, DWORD checked_VA, WORD added_offset, DWORD added_VA) 
+BOOL CPE::Add_DataToRelocDir(WORD checked_offset, DWORD checked_VA, WORD added_offset, DWORD added_VA)
 {
-	//这个函数写的还不完美，重定位的添加写的很粗暴，导致aslr会失效。
+	//这个函数写的还有些问题：
+	//1.重定位的添加写的很粗暴，导致aslr会失效。2.在极端情况下reloc可能溢出覆盖后面的区段，存在不稳定情况
 	bool flag = 0;
 	//判断是否有重定位表
 	if (m_PERelocDir.VirtualAddress)
@@ -365,56 +372,93 @@ BOOL CPE::Add_DataToRelocDir(WORD checked_offset, DWORD checked_VA, WORD added_o
 			}
 			//2.1下一个区段
 			pPEReloc = (PIMAGE_BASE_RELOCATION)((DWORD)pPEReloc + pPEReloc->SizeOfBlock);
-		}	
+		}
 	}
-	//3.如果DataAddr在重定位表里，为NeedtoReloAddr创建新块
+	//3.如果DataAddr在重定位表里
 	if (flag) {
 		//1.获取重定位表结构体指针
 		PIMAGE_BASE_RELOCATION	pPEReloc =
 			(PIMAGE_BASE_RELOCATION)(m_pFileBuf + m_PERelocDir.VirtualAddress);
-		//2.获取每个重定位块，让pPEReloc走到终点
-		while (pPEReloc->VirtualAddress)
-			//2.1下一个区段
-			pPEReloc = (PIMAGE_BASE_RELOCATION)((DWORD)pPEReloc + pPEReloc->SizeOfBlock);
-		//3.创建新重定位块
-		pPEReloc->VirtualAddress = added_VA;
-		pPEReloc->SizeOfBlock = 1 * sizeof(WORD) + 8;
-		//3.1写入block
-		PTYPEOFFSET pTypeOffset = (PTYPEOFFSET)(pPEReloc + 1);
-		*(PWORD)(&pTypeOffset[0]) = 0x3000 + added_offset;
 
-		//3.2提前保存原始重定位表size
-		if (Raw_RelocDirsize == 0)
-			Raw_RelocDirsize = m_PERelocDir.Size;
-		//3.3修改重定位表的Size成员
+		//2.修改重定位表的Size成员
 		m_pNtHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].Size += 1 * sizeof(WORD) + 8;
 		m_PERelocDir.Size += 1 * sizeof(WORD) + 8;
-		//3.4修改imagesize
-		DWORD Raw_virtualsize ;
-		DWORD cur_virtualsize ;
-
-		if (Raw_RelocDirsize % 0x1000)
-			Raw_virtualsize = (Raw_RelocDirsize & 0xFFFFF000) + 0x1000;
-		else
-			Raw_virtualsize = Raw_RelocDirsize;
-		if (m_PERelocDir.Size % 0x1000)
-			cur_virtualsize = (m_PERelocDir.Size & 0xFFFFF000) + 0x1000;
-		else
-			cur_virtualsize = m_PERelocDir.Size;
-
-		if (cur_virtualsize > Raw_virtualsize) {
-			m_pNtHeader->OptionalHeader.SizeOfImage += (cur_virtualsize - Raw_virtualsize);
-			Raw_RelocDirsize += (cur_virtualsize - Raw_virtualsize);
-		}
-		//3.5修改重定位区段的virtualsize成员
+		/*
+		//2.1判断要不要扩大重定位区段的空间（virtual size）
 		PIMAGE_SECTION_HEADER pSectionHeader = IMAGE_FIRST_SECTION(m_pNtHeader);
 		for (DWORD i = 0; i < m_pNtHeader->FileHeader.NumberOfSections; i++, pSectionHeader++)
 		{	//如果当前区段是重定位区段
 			if (pSectionHeader->VirtualAddress == m_PERelocDir.VirtualAddress) {
-				pSectionHeader->Misc.VirtualSize = m_PERelocDir.Size;
+				//求出VirtualSize的内存对齐大小
+				DWORD dwTemp = 0;
+				dwTemp = (pSectionHeader->Misc.VirtualSize / m_dwMemAlign) * m_dwMemAlign;
+				if (pSectionHeader->Misc.VirtualSize % m_dwMemAlign)
+				{
+					//dwTemp += 0x1000;
+					dwTemp += m_dwMemAlign;
+				}
+				//重定位表.size已经超过了重定位区段空间.virtual size的对齐大小
+				if (m_PERelocDir.Size > dwTemp)
+				{
+					pSectionHeader->Misc.VirtualSize += m_dwMemAlign;
+					pSectionHeader->SizeOfRawData += m_dwMemAlign;
+					m_pNtHeader->OptionalHeader.SizeOfImage += m_dwMemAlign;
+					m_dwImageSize += m_dwMemAlign;
+				}
 			}
 		}
+		*/
+		//3.获取每个重定位块，让pPEReloc走到终点
+		while (pPEReloc->VirtualAddress)
+			//3.1下一个区段
+			pPEReloc = (PIMAGE_BASE_RELOCATION)((DWORD)pPEReloc + pPEReloc->SizeOfBlock);
+		//3.2创建新重定位块
+		pPEReloc->VirtualAddress = added_VA;
+		pPEReloc->SizeOfBlock = 1 * sizeof(WORD) + 8;
+		//3.3写入block
+		PTYPEOFFSET pTypeOffset = (PTYPEOFFSET)(pPEReloc + 1);
+		*(PWORD)(&pTypeOffset[0]) = 0x3000 + added_offset;
+
 	}
 
 	return flag;
+}
+
+
+void CPE::AddSize_RelocSection()
+{
+	m_pDosHeader = (PIMAGE_DOS_HEADER)m_pFileBuf;
+	m_pNtHeader = (PIMAGE_NT_HEADERS)(m_pFileBuf + m_pDosHeader->e_lfanew);
+	m_PERelocDir =
+		IMAGE_DATA_DIRECTORY(m_pNtHeader->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC]);
+	PIMAGE_SECTION_HEADER pSectionHeader = IMAGE_FIRST_SECTION(m_pNtHeader);
+	
+
+	m_pNtHeader->OptionalHeader.SizeOfImage = m_pNtHeader->OptionalHeader.SizeOfHeaders;
+	for (DWORD i = 0; i < m_dwSectionNum; i++, pSectionHeader++)
+	{	//如果当前是重定位区段，且是最后一个区段。
+		if (pSectionHeader->VirtualAddress == m_PERelocDir.VirtualAddress && i == (m_dwSectionNum - 1)) 
+		{	//增加区段大小，
+			pSectionHeader->Misc.VirtualSize += m_PERelocDir.Size * 0x10;
+			//改Raw Size
+			DWORD dwTemp = 0;
+			dwTemp = (pSectionHeader->Misc.VirtualSize / m_dwMemAlign) * m_dwMemAlign;
+			if (pSectionHeader->Misc.VirtualSize % m_dwMemAlign)
+			{
+				//dwTemp += 0x1000;
+				dwTemp += m_dwMemAlign;
+			}
+			pSectionHeader->SizeOfRawData = dwTemp;
+		}
+		//改SizeOfImage
+		DWORD dwTemp = 0;
+		dwTemp = (pSectionHeader->Misc.VirtualSize / m_dwMemAlign) * m_dwMemAlign;
+		if (pSectionHeader->Misc.VirtualSize % m_dwMemAlign)
+		{
+			//dwTemp += 0x1000;
+			dwTemp += m_dwMemAlign;
+		}
+		m_pNtHeader->OptionalHeader.SizeOfImage += dwTemp;
+		//本来还要改m_dwImageSize，但是后面调用的GetPEInfo()已经对其更新了。
+	}
 }

@@ -367,7 +367,7 @@ UINT x86Insn_Mutation::Update_Mem()
 	size_t temp_size = FinalMem_Size;
 	FinalMem_Size *= 2;
 	Final_MutMemory = VirtualAlloc(NULL, FinalMem_Size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-	if (Final_MutMemory == NULL)
+	if (Final_MutMemory == nullptr)
 	{
 		MessageBox(NULL, _T("Final_MutMemory…Í«Îø’º‰ ß∞‹"), NULL, NULL);
 	}

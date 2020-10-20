@@ -58,10 +58,11 @@ public:
 		LPBYTE& pFinalBuf, DWORD& pFinalBufSize);
 												//合并PE文件和Shell
 
+	void AddSize_RelocSection();
+
 	void Find_reloc();							//搜集需要reloc的数据的内存地址及其数据本身的偏移值
 
-
-	DWORD Raw_RelocDirsize;						//初始值为原始的重定位表大小
+	//DWORD Raw_RelocDirsize;						//初始值为原始的重定位表大小
 	BOOL Add_DataToRelocDir(WORD checked_offset, DWORD checked_VA, WORD added_offset, DWORD added_VA);
 };
 
