@@ -434,7 +434,7 @@ void CPE::AddSize_RelocSection()
 	PIMAGE_SECTION_HEADER pSectionHeader = IMAGE_FIRST_SECTION(m_pNtHeader);
 	
 
-	m_pNtHeader->OptionalHeader.SizeOfImage = m_pNtHeader->OptionalHeader.SizeOfHeaders;
+	m_pNtHeader->OptionalHeader.SizeOfImage = 0x1000;
 	for (DWORD i = 0; i < m_dwSectionNum; i++, pSectionHeader++)
 	{	//如果当前是重定位区段，且是最后一个区段。
 		if (pSectionHeader->VirtualAddress == m_PERelocDir.VirtualAddress && i == (m_dwSectionNum - 1)) 
@@ -448,7 +448,7 @@ void CPE::AddSize_RelocSection()
 				//dwTemp += 0x1000;
 				dwTemp += m_dwMemAlign;
 			}
-			pSectionHeader->SizeOfRawData = dwTemp;
+			//pSectionHeader->SizeOfRawData = dwTemp;
 		}
 		//改SizeOfImage
 		DWORD dwTemp = 0;

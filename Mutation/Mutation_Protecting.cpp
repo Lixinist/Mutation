@@ -461,14 +461,31 @@ void Mutation::ClearCode(LPBYTE Start_Addr, LPBYTE End_Addr)
 //保存至文件
 BOOL Mutation::SaveFinalFile(LPBYTE pFinalBuf, DWORD pFinalBufSize, CString strFilePath)
 {
-	//修正区段信息中 文件对齐大小（文件对齐大小同内存对齐大小）
 	PIMAGE_DOS_HEADER pDosHeader = (PIMAGE_DOS_HEADER)pFinalBuf;
 	PIMAGE_NT_HEADERS pNtHeader = (PIMAGE_NT_HEADERS)(pFinalBuf + pDosHeader->e_lfanew);
 	PIMAGE_SECTION_HEADER pSectionHeader = IMAGE_FIRST_SECTION(pNtHeader);
 	for (DWORD i = 0; i < pNtHeader->FileHeader.NumberOfSections; i++, pSectionHeader++)
 	{
+		//修正区段信息中 文件对齐大小（文件对齐大小同内存对齐大小），文件对齐地址（同上）
+		DWORD dwTemp = 0;
+		dwTemp = (pSectionHeader->Misc.VirtualSize / 0x1000) * 0x1000;
+		if (pSectionHeader->Misc.VirtualSize % 0x1000)
+		{
+			dwTemp += 0x1000;
+		}
+		pSectionHeader->SizeOfRawData = dwTemp;
 		pSectionHeader->PointerToRawData = pSectionHeader->VirtualAddress;
+
+		//修正SizeOfCode
+		if (pSectionHeader->VirtualAddress == pNtHeader->OptionalHeader.BaseOfCode) {
+			pNtHeader->OptionalHeader.SizeOfCode = pSectionHeader->SizeOfRawData;
+		}
+
 	}
+	//修正文件对齐大小为0x1000
+	pNtHeader->OptionalHeader.FileAlignment = 0x1000;
+	
+	
 
 
 	//获取保存路径
