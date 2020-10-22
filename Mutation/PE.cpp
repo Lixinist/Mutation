@@ -337,45 +337,14 @@ void CPE::Find_reloc()
 }
 
 
-BOOL CPE::Add_DataToRelocDir(WORD checked_offset, DWORD checked_VA, WORD added_offset, DWORD added_VA)
+BOOL CPE::Add_DataToRelocDir(WORD added_offset, DWORD added_VA)
 {
 	//这个函数写的还有些问题：
 	//1.重定位的添加写的很粗暴，导致aslr会失效。2.在极端情况下reloc可能溢出覆盖后面的区段，存在不稳定情况
-	bool flag = 0;
+	bool flag = 1;
 	//判断是否有重定位表
 	if (m_PERelocDir.VirtualAddress)
 	{
-		//1.获取重定位表结构体指针
-		PIMAGE_BASE_RELOCATION	pPEReloc =
-			(PIMAGE_BASE_RELOCATION)(m_pFileBuf + m_PERelocDir.VirtualAddress);
-		//2.获取每个重定位块，判断DataAddr是否在重定位表
-		while (pPEReloc->VirtualAddress)
-		{
-			//3.如果在当前重定位块
-			if (pPEReloc->VirtualAddress == checked_VA) {
-				PTYPEOFFSET pTypeOffset = (PTYPEOFFSET)(pPEReloc + 1);
-				DWORD dwNumber = (pPEReloc->SizeOfBlock - 8) / 2;
-				for (DWORD i = 0; i < dwNumber; i++)
-				{
-					//block为0
-					if (*(PWORD)(&pTypeOffset[i]) == NULL)
-						continue;
-					//block相等，DataAddr在重定位表中，对其抹0
-					if (checked_offset == pTypeOffset[i].offset && pTypeOffset[i].Type == 3) {
-						flag = 1;
-						*(PWORD)(&pTypeOffset[i]) = NULL;
-						break;
-					}
-				}
-				if (flag)
-					break;
-			}
-			//2.1下一个区段
-			pPEReloc = (PIMAGE_BASE_RELOCATION)((DWORD)pPEReloc + pPEReloc->SizeOfBlock);
-		}
-	}
-	//3.如果DataAddr在重定位表里
-	if (flag) {
 		//1.获取重定位表结构体指针
 		PIMAGE_BASE_RELOCATION	pPEReloc =
 			(PIMAGE_BASE_RELOCATION)(m_pFileBuf + m_PERelocDir.VirtualAddress);
@@ -418,9 +387,10 @@ BOOL CPE::Add_DataToRelocDir(WORD checked_offset, DWORD checked_VA, WORD added_o
 		//3.3写入block
 		PTYPEOFFSET pTypeOffset = (PTYPEOFFSET)(pPEReloc + 1);
 		*(PWORD)(&pTypeOffset[0]) = 0x3000 + added_offset;
-
 	}
-
+	else
+		flag = 0;
+	
 	return flag;
 }
 

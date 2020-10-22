@@ -63,6 +63,6 @@ public:
 	void Find_reloc();							//搜集需要reloc的数据的内存地址及其数据本身的偏移值
 
 	//DWORD Raw_RelocDirsize;						//初始值为原始的重定位表大小
-	BOOL Add_DataToRelocDir(WORD checked_offset, DWORD checked_VA, WORD added_offset, DWORD added_VA);
+	BOOL Add_DataToRelocDir(WORD added_offset, DWORD added_VA);
 };
 

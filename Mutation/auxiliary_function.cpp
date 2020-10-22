@@ -58,16 +58,110 @@ BOOL x86Insn_Mutation::RelocData_imm_mem(DWORD DataAddr, IN OUT x86::Gp base_reg
 */
 BOOL x86Insn_Mutation::DealWithReloc(DWORD DataAddr, DWORD NeedtoReloActuAddr)
 {
-	bool flag = 0;
-	//参数的offset，
-	WORD arg1_offset = (WORD)(DataAddr & 0xFFF);
-	WORD arg2_offset = (WORD)(NeedtoReloActuAddr & 0xFFF);
-	//参数的VirtualAddress
-	DWORD arg1_VirtualAddress = (DataAddr - (DWORD)objPE.m_pFileBuf) & 0xFFFFF000;
-	DWORD arg2_VirtualAddress = (NeedtoReloActuAddr - objPE.m_dwImageBase) & 0xFFFFF000;
+	typedef struct _TYPEOFFSET 
+	{
+	WORD	offset : 12;						//偏移值
+	WORD	Type : 4;							//重定位属性(方式)
+	}TYPEOFFSET, *PTYPEOFFSET;
+	bool	flag = 0;
+	WORD	checked_offset = (WORD)(DataAddr & 0xFFF);
+	DWORD	checked_VA = (DataAddr - (DWORD)objPE.m_pFileBuf) & 0xFFFFF000;
+	WORD	added_offset = (WORD)(NeedtoReloActuAddr & 0xFFF);
+	DWORD	added_VA = (NeedtoReloActuAddr - objPE.m_dwImageBase) & 0xFFFFF000;
 
-	flag = objPE.Add_DataToRelocDir(arg1_offset, arg1_VirtualAddress, arg2_offset, arg2_VirtualAddress);
 
+	//判断是否有重定位表
+	if (objPE.m_PERelocDir.VirtualAddress)
+	{
+		//1.获取重定位表结构体指针
+		PIMAGE_BASE_RELOCATION	pPEReloc =
+			(PIMAGE_BASE_RELOCATION)(objPE.m_pFileBuf + objPE.m_PERelocDir.VirtualAddress);
+		//2.获取每个重定位块，判断DataAddr是否在重定位表
+		while (pPEReloc->VirtualAddress)
+		{
+			//3.如果在当前重定位块
+			if (pPEReloc->VirtualAddress == checked_VA) {
+				PTYPEOFFSET pTypeOffset = (PTYPEOFFSET)(pPEReloc + 1);
+				DWORD dwNumber = (pPEReloc->SizeOfBlock - 8) / 2;
+				for (DWORD i = 0; i < dwNumber; i++)
+				{
+					//block为0
+					if (*(PWORD)(&pTypeOffset[i]) == NULL)
+						continue;
+					//block相等，DataAddr在重定位表中，对其抹0
+					if (checked_offset == pTypeOffset[i].offset && pTypeOffset[i].Type == 3) {
+						flag = 1;
+						*(PWORD)(&pTypeOffset[i]) = NULL;
+						break;
+					}
+				}
+				if (flag)
+					break;
+			}
+			//2.1下一个区段
+			pPEReloc = (PIMAGE_BASE_RELOCATION)((DWORD)pPEReloc + pPEReloc->SizeOfBlock);
+		}
+	}
+	//存在重定位表中
+	if (flag)
+	{
+		objPE.Add_DataToRelocDir(added_offset, added_VA);
+	}
+
+	return flag;
+}
+BOOL x86Insn_Mutation_again::DealWithReloc(DWORD DataAddr, DWORD NeedtoReloActuAddr)
+{
+	typedef struct _TYPEOFFSET
+	{
+		WORD	offset : 12;						//偏移值
+		WORD	Type : 4;							//重定位属性(方式)
+	}TYPEOFFSET, *PTYPEOFFSET;
+	bool	flag = 0;
+	WORD	checked_offset = (WORD)(DataAddr & 0xFFF);
+	DWORD	checked_VA = (Jcc_ActuAddr(DataAddr) - objPE.m_dwImageBase) & 0xFFFFF000;
+	WORD	added_offset = (WORD)(NeedtoReloActuAddr & 0xFFF);
+	DWORD	added_VA = (NeedtoReloActuAddr - objPE.m_dwImageBase) & 0xFFFFF000;
+
+
+	//判断是否有重定位表
+	if (objPE.m_PERelocDir.VirtualAddress)
+	{
+		//1.获取重定位表结构体指针
+		PIMAGE_BASE_RELOCATION	pPEReloc =
+			(PIMAGE_BASE_RELOCATION)(objPE.m_pFileBuf + objPE.m_PERelocDir.VirtualAddress);
+		//2.获取每个重定位块，判断DataAddr是否在重定位表
+		while (pPEReloc->VirtualAddress)
+		{
+			//3.如果在当前重定位块
+			if (pPEReloc->VirtualAddress == checked_VA) {
+				PTYPEOFFSET pTypeOffset = (PTYPEOFFSET)(pPEReloc + 1);
+				DWORD dwNumber = (pPEReloc->SizeOfBlock - 8) / 2;
+				if (dwNumber != 1) {
+					throw "上一次变异添加的 重定位结构体 错误";
+				}
+				for (DWORD i = 0; i < dwNumber; i++)
+				{
+					//block为0
+					if (*(PWORD)(&pTypeOffset[i]) == NULL)
+						continue;
+					//block相等，DataAddr在重定位表中。
+					//由于是二次变异，可以直接更新上一次变异时加入的结构体的 VA 和 offset
+					if (checked_offset == pTypeOffset[i].offset && pTypeOffset[i].Type == 3) {
+						flag = 1;
+						pPEReloc->VirtualAddress = added_VA;
+						*(PWORD)(&pTypeOffset[i]) = 0x3000 + added_offset;
+						break;
+					}
+				}
+				if (flag)
+					break;
+			}
+			//2.1下一个区段
+			pPEReloc = (PIMAGE_BASE_RELOCATION)((DWORD)pPEReloc + pPEReloc->SizeOfBlock);
+		}
+	}
+	
 	return flag;
 }
 

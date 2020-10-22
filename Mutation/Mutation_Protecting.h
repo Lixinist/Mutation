@@ -157,14 +157,15 @@ public:
 
 	//重定位imm和mem(disp)
 	BOOL	RelocData_imm_mem(DWORD DataAddr, IN OUT x86::Gp base_reg, IN OUT UINT* offset);
-
-	BOOL	DealWithReloc(DWORD DataAddr, DWORD NeedtoReloActuAddr);
-
 	//修复jmp的offset
 	UINT	Fix_JmpOffset();
+	//更新内存容量
+	UINT	Update_Mem();
+	//重定位处理
+	virtual BOOL	DealWithReloc(DWORD DataAddr, DWORD NeedtoReloActuAddr);
 	//转换jcc目标跳转地址为实际地址
 	virtual UINT	Jcc_ActuAddr(DWORD Target_JumpAddr);
-	UINT	Update_Mem();
+	
 	UINT	reloc();
 
 	x86_MutationRule
@@ -175,7 +176,8 @@ class x86Insn_Mutation_again : public x86Insn_Mutation
 {
 public:
 	//重写方法
-	UINT Jcc_ActuAddr(DWORD Target_JumpAddr);
+	UINT	Jcc_ActuAddr(DWORD Target_JumpAddr);
+	BOOL	DealWithReloc(DWORD DataAddr, DWORD NeedtoReloActuAddr);
 public:
 	void* old_Final_MutMemory;
 	//继承成员数据
