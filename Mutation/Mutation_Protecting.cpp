@@ -298,9 +298,7 @@ UINT x86Insn_Mutation::Resolve_UnknownInsn()
 	imm.imm_offset = x86->encoding.imm_offset;
 	imm.imm_size = x86->encoding.imm_size;
 
-	//1.把未知指令copy过去
-	memcpy_s((void*)((size_t)Final_MutMemory + Final_CodeSize), insn.size, (void*)insn.address, insn.size);
-	//2.加入CodeSection的vector
+	//1.加入CodeSection的vector
 	SingMut_Sec = { 0 };
 	SingMut_Sec.Raw_CodeAddr = (DWORD)insn.address;
 	SingMut_Sec.Mut_CodeStartAddr = (DWORD)Final_MutMemory + Final_CodeSize;
@@ -308,7 +306,17 @@ UINT x86Insn_Mutation::Resolve_UnknownInsn()
 	SingMut_Sec.Mut_CodeEndAddr = SingMut_Sec.Mut_CodeStartAddr + insn.size;
 	SingMut_Sec.Mut_CodeSize = insn.size;
 	SingMut.push_back(SingMut_Sec);
+	//2.如果Final剩余内存装不下这个变异指令
+	if (FinalRemainMem_Size < SingMut_Sec.Mut_CodeSize)
+	{
+		Update_Mem();
+	}
+	FinalRemainMem_Size -= SingMut_Sec.Mut_CodeSize;
+	//3.把未知指令copy过去
+	memcpy_s((void*)((size_t)Final_MutMemory + Final_CodeSize), insn.size, (void*)insn.address, insn.size);
+	//3.1更新Final_CodeSize
 	Final_CodeSize += insn.size;
+
 	//3.重定位处理：
 	//如果该指令的mem的disp_size为4，可能有重定位
 	///*
@@ -346,13 +354,13 @@ UINT x86Insn_Mutation::Copy_MutCodes_to_FinalMem()
 
 
 	//2.如果Final剩余内存装不下这个变异指令
-	FinalRemainMem_Size -= SingMut_Sec.Mut_CodeSize;
-	if (FinalRemainMem_Size < 0)
+	if (FinalRemainMem_Size < SingMut_Sec.Mut_CodeSize)
 	{
 		Update_Mem();
 	}
+	FinalRemainMem_Size -= SingMut_Sec.Mut_CodeSize;
 	//3.将变异代码写到Final空间
-	Mut_Code.copyFlattenedData((void*)SingMut_Sec.Mut_CodeStartAddr, SingMut_Sec.Mut_CodeSize, CodeHolder::kCopyWithPadding);
+	Mut_Code.copyFlattenedData((void*)SingMut.back().Mut_CodeStartAddr, SingMut_Sec.Mut_CodeSize, CodeHolder::kCopyWithPadding);
 	//3.1更新Final_CodeSize
 	Final_CodeSize += SingMut_Sec.Mut_CodeSize;
 
