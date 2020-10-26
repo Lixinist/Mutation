@@ -12,7 +12,7 @@ UINT _mov_reg_mem_16_8(x86_reg op0, x86_mem* mem1);\
 UINT _mov_mem_reg_16_8(x86_mem* mem0, x86_reg op1);\
 UINT _mov_mem_imm_16_8(x86_mem* mem0, x86_imm* imm1);\
 \
-UINT _add();\
+virtual UINT _add();\
 UINT _add_reg_reg(x86_reg op0, x86_reg op1);\
 UINT _add_reg_imm(x86_reg op0, x86_imm* imm1);\
 UINT _add_reg_mem(x86_reg op0, x86_mem* mem1);\
@@ -117,7 +117,7 @@ UINT _pop_mem(x86_mem* mem0);\
 UINT _pop_reg_16(x86_reg op0);\
 UINT _pop_mem_16(x86_mem* mem0);\
 \
-UINT _call();\
+virtual UINT _call();\
 UINT _call_reg(x86_reg op0);\
 UINT _call_imm(x86_jcc* jcc0);\
 UINT _call_mem(x86_mem* mem0);\
@@ -209,4 +209,6 @@ typedef enum {\
 	jg, jge, jl, jle, jna, jnae, jnb, jnbe,\
 	jnc, jng, jnge, jnl, jnle, jno, jnp, jns,\
 	jnz, jo, jp, jpe, jpo, js, jz,\
+\
+	Call_FixOffset, Add_FixOffset\
 }x86Insn_Class;

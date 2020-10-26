@@ -377,16 +377,20 @@ UINT x86Insn_Mutation::Update_Mem()
 
 	//更新几个vector里的需要改变的绝对地址
 	size_t differ = (size_t)Final_MutMemory - (size_t)temp;
-	for (auto c : Mut_Mark_again) {
+	for (auto &c : Mut_Mark_again) {
 		c.Protected_Start += differ;
 		c.Protected_End += differ;
 	}
-	for (auto c : SingMut) {
+	for (auto &c : SingMut) {
 		c.Mut_CodeStartAddr += differ;
 		c.Mut_CodeEndAddr += differ;
 	}
-	for (auto c : Fix_Offset) {
+	for (auto &c : Fix_Offset) {
 		c.address += differ;
+	}
+	for (auto &c : CA_Fix_Offset) {
+		c.Call_Addr += differ;
+		c.Add_Addr += differ;
 	}
 
 	return true;

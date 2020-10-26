@@ -838,6 +838,138 @@ UINT x86Insn_Mutation::_add()
 
 	return result;
 }
+UINT x86Insn_Mutation_again::_add()
+{
+	UINT result = -1;
+	cs_x86 *x86;
+	if (insn.detail == NULL)
+		return result;
+	x86 = &(insn.detail->x86);
+	x86_mem mem = { 0 };
+	x86_imm imm = { 0 };
+	x86::Assembler a(&Mut_Code);
+	Label L0 = a.newLabel();
+
+
+	//先判断是否是x16或x8代码
+	if (x86->operands[0].size != 4 || x86->operands[1].size != 4) {
+		//add reg,reg_16_8
+		if (x86->operands[0].type == X86_OP_REG && x86->operands[1].type == X86_OP_REG)
+			return(_add_reg_reg_16_8(x86->operands[0].reg, x86->operands[1].reg));
+		//add reg,imm_16_8
+		if (x86->operands[0].type == X86_OP_REG && x86->operands[1].type == X86_OP_IMM) {
+			imm.address = (DWORD)insn.address;
+			imm.imm_value = (DWORD)x86->operands[1].imm;
+			imm.imm_offset = x86->encoding.imm_offset;
+			imm.imm_size = x86->encoding.imm_size;
+			return(_add_reg_imm_16_8(x86->operands[0].reg, &imm));
+		}
+		//add_reg_mem_16_8
+		if (x86->operands[0].type == X86_OP_REG && x86->operands[1].type == X86_OP_MEM) {
+			mem.address = (DWORD)insn.address;
+			mem.disp_offset = x86->encoding.disp_offset;
+			mem.disp_size = x86->encoding.disp_size;
+			mem.base = x86->operands[1].mem.base;
+			mem.index = x86->operands[1].mem.index;
+			mem.scale = x86->operands[1].mem.scale;
+			mem.disp = x86->operands[1].mem.disp;
+			mem.mem_size = x86->operands[1].size;
+			return(_add_reg_mem_16_8(x86->operands[0].reg, &mem));
+		}
+		//add_mem_reg_16_8
+		if (x86->operands[0].type == X86_OP_MEM && x86->operands[1].type == X86_OP_REG) {
+			mem.address = (DWORD)insn.address;
+			mem.disp_offset = x86->encoding.disp_offset;
+			mem.disp_size = x86->encoding.disp_size;
+			mem.base = x86->operands[0].mem.base;
+			mem.index = x86->operands[0].mem.index;
+			mem.scale = x86->operands[0].mem.scale;
+			mem.disp = x86->operands[0].mem.disp;
+			mem.mem_size = x86->operands[0].size;
+			return(_add_mem_reg_16_8(&mem, x86->operands[1].reg));
+		}
+		//add_mem_imm_16_8
+		if (x86->operands[0].type == X86_OP_MEM && x86->operands[1].type == X86_OP_IMM) {
+			mem.address = (DWORD)insn.address;
+			mem.disp_offset = x86->encoding.disp_offset;
+			mem.disp_size = x86->encoding.disp_size;
+			mem.base = x86->operands[0].mem.base;
+			mem.index = x86->operands[0].mem.index;
+			mem.scale = x86->operands[0].mem.scale;
+			mem.disp = x86->operands[0].mem.disp;
+			mem.mem_size = x86->operands[0].size;
+			imm.address = (DWORD)insn.address;
+			imm.imm_value = (DWORD)x86->operands[1].imm;
+			imm.imm_offset = x86->encoding.imm_offset;
+			imm.imm_size = x86->encoding.imm_size;
+			return(_add_mem_imm_16_8(&mem, &imm));
+		}
+	}
+
+	//x32变异代码没有做位数的判断处理，所以在上面先判断是否是x16或x8代码	
+	if (x86->op_count == 2) {
+		//add reg,reg
+		if (x86->operands[0].type == X86_OP_REG && x86->operands[1].type == X86_OP_REG)
+			return(_add_reg_reg(x86->operands[0].reg, x86->operands[1].reg));
+		//add reg,imm
+		if (x86->operands[0].type == X86_OP_REG && x86->operands[1].type == X86_OP_IMM) {
+			for (auto &c : old_Fix_Offset) {
+				if (c.Add_Addr == insn.address) {
+					a.add(to_asmjit_reg(x86->operands[0].reg), (UINT)c.FixedOffset);
+					return(Add_FixOffset);
+				}
+			}
+
+			imm.address = (DWORD)insn.address;
+			imm.imm_value = (DWORD)x86->operands[1].imm;
+			imm.imm_offset = x86->encoding.imm_offset;
+			imm.imm_size = x86->encoding.imm_size;
+			return(_add_reg_imm(x86->operands[0].reg, &imm));
+		}
+		//add_reg_mem
+		if (x86->operands[0].type == X86_OP_REG && x86->operands[1].type == X86_OP_MEM) {
+			mem.address = (DWORD)insn.address;
+			mem.disp_offset = x86->encoding.disp_offset;
+			mem.disp_size = x86->encoding.disp_size;
+			mem.base = x86->operands[1].mem.base;
+			mem.index = x86->operands[1].mem.index;
+			mem.scale = x86->operands[1].mem.scale;
+			mem.disp = x86->operands[1].mem.disp;
+			mem.mem_size = x86->operands[1].size;
+			return(_add_reg_mem(x86->operands[0].reg, &mem));
+		}
+		//add_mem_reg
+		if (x86->operands[0].type == X86_OP_MEM && x86->operands[1].type == X86_OP_REG) {
+			mem.address = (DWORD)insn.address;
+			mem.disp_offset = x86->encoding.disp_offset;
+			mem.disp_size = x86->encoding.disp_size;
+			mem.base = x86->operands[0].mem.base;
+			mem.index = x86->operands[0].mem.index;
+			mem.scale = x86->operands[0].mem.scale;
+			mem.disp = x86->operands[0].mem.disp;
+			mem.mem_size = x86->operands[0].size;
+			return(_add_mem_reg(&mem, x86->operands[1].reg));
+		}
+		//add_mem_imm
+		if (x86->operands[0].type == X86_OP_MEM && x86->operands[1].type == X86_OP_IMM) {
+			mem.address = (DWORD)insn.address;
+			mem.disp_offset = x86->encoding.disp_offset;
+			mem.disp_size = x86->encoding.disp_size;
+			mem.base = x86->operands[0].mem.base;
+			mem.index = x86->operands[0].mem.index;
+			mem.scale = x86->operands[0].mem.scale;
+			mem.disp = x86->operands[0].mem.disp;
+			mem.mem_size = x86->operands[0].size;
+			imm.address = (DWORD)insn.address;
+			imm.imm_value = (DWORD)x86->operands[1].imm;
+			imm.imm_offset = x86->encoding.imm_offset;
+			imm.imm_size = x86->encoding.imm_size;
+			return(_add_mem_imm(&mem, &imm));
+		}
+	}
+
+	return result;
+}
 //op只支持eax，ebx，ecx，edx，ebp等x32位寄存器（不支持esp）。
 UINT x86Insn_Mutation::_add_reg_reg(x86_reg op0, x86_reg op1)
 {
@@ -5740,7 +5872,7 @@ UINT x86Insn_Mutation::_call()
 	x86 = &(insn.detail->x86);
 	x86_jcc jcc = { 0 };
 	x86_mem mem = { 0 };
-
+	
 	//call reg
 	if (x86->operands[0].type == X86_OP_REG)
 		return(_call_reg(x86->operands[0].reg));
@@ -5752,6 +5884,55 @@ UINT x86Insn_Mutation::_call()
 		jcc.Target_JumpAddr = (DWORD)x86->operands[0].imm;
 		return(_call_imm(&jcc));
 	}
+	//call mem
+	if (x86->operands[0].type == X86_OP_MEM) {
+		mem.address = (DWORD)insn.address;
+		mem.disp_offset = x86->encoding.disp_offset;
+		mem.disp_size = x86->encoding.disp_size;
+		mem.base = x86->operands[0].mem.base;
+		mem.index = x86->operands[0].mem.index;
+		mem.scale = x86->operands[0].mem.scale;
+		mem.disp = x86->operands[0].mem.disp;
+		mem.mem_size = x86->operands[0].size;
+		return(_call_mem(&mem));
+	}
+
+	return result;
+}
+UINT x86Insn_Mutation_again::_call()
+{
+	UINT result = -1;
+	cs_x86 *x86;
+	if (insn.detail == NULL)
+		return result;
+	x86 = &(insn.detail->x86);
+	x86_jcc jcc = { 0 };
+	x86_mem mem = { 0 };
+	x86::Assembler a(&Mut_Code);
+	Label L0 = a.newLabel();
+
+	
+	//call imm
+	if (x86->operands[0].type == X86_OP_IMM) {
+		for (auto &c : old_Fix_Offset) {
+			if (c.Call_Addr == insn.address) {
+				a.call(L0);
+				size_t	Temp_CodeSize = Mut_Code.codeSize() + Final_CodeSize;
+				c.FixedOffset = Temp_CodeSize;
+				a.bind(L0);
+				return(Call_FixOffset);
+			}
+		}
+
+		jcc.address = (DWORD)insn.address;
+		jcc.imm_offset = x86->encoding.imm_offset;
+		jcc.imm_size = x86->encoding.imm_size;
+		jcc.Target_JumpAddr = (DWORD)x86->operands[0].imm;
+		return(_call_imm(&jcc));
+	}
+	//call reg
+	if (x86->operands[0].type == X86_OP_REG)
+		return(_call_reg(x86->operands[0].reg));
 	//call mem
 	if (x86->operands[0].type == X86_OP_MEM) {
 		mem.address = (DWORD)insn.address;

@@ -10,7 +10,8 @@
 //重定位imm和mem(disp)。有重定位时，基地址会赋给base_reg，偏移给offset。无重定位时，直接返回0
 BOOL x86Insn_Mutation::RelocData_imm_mem(DWORD DataAddr, IN OUT x86::Gp base_reg, IN OUT UINT* offset)
 {
-	x86::Assembler a(&Mut_Code);
+	CA_FixOffset	CAFO_Struct = { 0 };
+	x86::Assembler	a(&Mut_Code);
 	if (objPE.m_PERelocDir.VirtualAddress)
 	{
 		//遍历重定位
@@ -28,18 +29,23 @@ BOOL x86Insn_Mutation::RelocData_imm_mem(DWORD DataAddr, IN OUT x86::Gp base_reg
 
 				a.pushfd();
 				a.push(rand0);
-
+				size_t	Call_CodeSize = Mut_Code.codeSize() + Final_CodeSize;
 				a.call(L0);
-				size_t Temp_CodeSize = Mut_Code.codeSize() + Final_CodeSize;
+				size_t	Temp_CodeSize = Mut_Code.codeSize() + Final_CodeSize;
 				a.bind(L0);
 				a.mov(rand0, 0);
 				a.add(rand0, (UINT)objPE.m_dwImageSize);	//-镜像模块大小-自己代码的偏移（相对自己区段）
+				size_t	Add_CodeSize = Mut_Code.codeSize() + Final_CodeSize;
 				a.add(rand0, (UINT)Temp_CodeSize);
 				a.sub(ptr(x86::esp), rand0);
 				a.pop(base_reg);							//基地址pop到base_reg
 
 				a.pop(rand0);
 				a.popfd();
+
+				CAFO_Struct.Call_Addr = (DWORD)Final_MutMemory + Call_CodeSize;
+				CAFO_Struct.Add_Addr = (DWORD)Final_MutMemory + Add_CodeSize;
+				CA_Fix_Offset.push_back(CAFO_Struct);
 
 				*offset = iter->Offset;
 				return true;
@@ -176,7 +182,7 @@ UINT x86Insn_Mutation::Fix_JmpOffset()
 	uint8_t imm_offset = 0;
 	
 	//从vector中遍历 并判断 是否有jns，jnp跳转到了当前指令地址
-	for (auto c : Fix_Offset) {
+	for (auto &c : Fix_Offset) {
 		if (c.Target_JumpAddr == insn.address) {
 			result = 1;
 			jcc_addr = c.address;

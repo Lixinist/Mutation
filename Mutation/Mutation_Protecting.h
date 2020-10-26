@@ -38,6 +38,12 @@ typedef struct _jcc_FixOffset
 	uint8_t		imm_offset;
 
 } FixOffset, *P_FixOffset;
+typedef struct _CallAdd_FixOffset
+{
+	DWORD		Call_Addr;
+	DWORD		Add_Addr;
+	DWORD		FixedOffset;
+}CA_FixOffset, *PCA_FixOffset;
 //static vector<FixOffset> Fix_Offset;
 
 
@@ -135,6 +141,7 @@ public:
 	Single_MutCode SingMut_Sec;
 	vector<Single_MutCode> SingMut;
 	vector<FixOffset> Fix_Offset;
+	vector<CA_FixOffset> CA_Fix_Offset;
 
 	//继承成员数据
 	x86Insn_Mutation& operator=(const Mutation& Mut) {
@@ -178,8 +185,11 @@ public:
 	//重写方法
 	UINT	Jcc_ActuAddr(DWORD Target_JumpAddr);
 	BOOL	DealWithReloc(DWORD DataAddr, DWORD NeedtoReloActuAddr);
+	UINT	_call();
+	UINT	_add();
 public:
 	void* old_Final_MutMemory;
+	vector<CA_FixOffset> old_Fix_Offset;
 	//继承成员数据
 	x86Insn_Mutation_again& operator=(const x86Insn_Mutation& code) {
 		//FinalMem_Size = code.FinalMem_Size;
@@ -187,8 +197,9 @@ public:
 		//Final_CodeSize = code.Final_CodeSize;
 		//SingMut = code.SingMut;
 		old_Final_MutMemory = code.Final_MutMemory;
+		old_Fix_Offset = code.CA_Fix_Offset;
 		objPE = code.objPE;
-		Fix_Offset = code.Fix_Offset;
+	//	Fix_Offset = code.Fix_Offset;
 		Mut_Mark = code.Mut_Mark_again;
 		return *this;
 	}
