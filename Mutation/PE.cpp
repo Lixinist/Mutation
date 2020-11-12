@@ -98,7 +98,7 @@ BOOL CPE::InitPE(CString strFilePath)
 			m_pFileBuf+pSectionHeader->PointerToRawData,
 			pSectionHeader->SizeOfRawData);
 	}
-	VirtualFree(m_pFileBuf, 0, MEM_DECOMMIT);
+	VirtualFree(m_pFileBuf, 0, MEM_RELEASE);
 	//delete[] m_pFileBuf;
 	m_pFileBuf = pFileBuf_New;
 	pFileBuf_New = NULL;
@@ -149,7 +149,7 @@ BOOL CPE::IsPE()
 	{
 		//不是PE
 		MessageBox(NULL, _T("不是有效的PE文件！"), _T("提示"), MB_OK);
-		VirtualFree(m_pFileBuf, 0, MEM_DECOMMIT);
+		VirtualFree(m_pFileBuf, 0, MEM_RELEASE);
 		//delete[] m_pFileBuf;
 		InitValue();
 		return FALSE;
@@ -159,7 +159,7 @@ BOOL CPE::IsPE()
 	{
 		//不是PE文件
 		MessageBox(NULL, _T("不是有效的PE文件！"), _T("提示"), MB_OK);
-		VirtualFree(m_pFileBuf, 0, MEM_DECOMMIT);
+		VirtualFree(m_pFileBuf, 0, MEM_RELEASE);
 		//delete[] m_pFileBuf;
 		InitValue();
 		return FALSE;

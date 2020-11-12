@@ -35,7 +35,7 @@ x86Insn_Mutation::~x86Insn_Mutation()
 	if (Final_MutMemory == nullptr)
 		return;
 
-	VirtualFree(Final_MutMemory, 0, MEM_DECOMMIT);
+	VirtualFree(Final_MutMemory, 0, MEM_RELEASE);
 	
 }
 void x86Insn_Mutation::InitValue()
@@ -48,12 +48,10 @@ void x86Insn_Mutation::InitValue()
 }
 
 
-
-
 void Mutation::Start(CString filepath)
 {
 	//CPE	objPE;
-	bool	again_flag = false;
+	void* Final_MutMemory = nullptr;
 	x86Insn_Mutation code;
 	x86Insn_Mutation_again code_again;
 	vector<Mark> Mark;
@@ -70,7 +68,7 @@ void Mutation::Start(CString filepath)
 	//1.寻找Mutation保护标志
 	if (Find_MutationMark(objPE.m_pFileBuf, objPE.m_dwImageSize, &Mark) == 0) {
 		MessageBox(NULL, _T("未找到Mutation保护标志！"), NULL, NULL);
-		VirtualFree(objPE.m_pFileBuf, 0, MEM_DECOMMIT);
+		VirtualFree(objPE.m_pFileBuf, 0, MEM_RELEASE);
 		//delete[] objPE.m_pFileBuf;
 		return;
 	}
@@ -78,34 +76,32 @@ void Mutation::Start(CString filepath)
 	//2.开始进行变异
 	//继承objPE和Mut_Mark数据
 	code = *this;
-	//code.objPE = this->objPE;								//objPE的初始化不适合放在构造函数，所以直接赋值过去
-	//code.Mut_Mark = this->Mut_Mark;
+	Final_MutMemory = code.Final_MutMemory;
 	code.Start_Mutation(code);									//不能写objMut.Start_Mutation()
 	////////////////////////////////////////////////////////////////////////////////////
 	//开始二次变异
-	again_flag = true;
 	code_again = code;
+	Final_MutMemory = code_again.Final_MutMemory;
 	code_again.Start_Mutation(code_again);
+	////////////////////////////////////////////////////////////////////////////////////
+
+
 
 
 	////////////////////////////////////////////////////////////////////////////////////
 	//3.合并PE文件和变异代码到新的缓冲区
 	LPBYTE pFinalBuf = nullptr;
 	DWORD dwFinalBufSize = 0;
-	if(again_flag)
-		objPE.MergeBuf(objPE.m_pFileBuf, objPE.m_dwImageSize,
-		(LPBYTE)code_again.Final_MutMemory, code_again.Final_CodeSize,
-			pFinalBuf, dwFinalBufSize);
-	else
-		objPE.MergeBuf(objPE.m_pFileBuf, objPE.m_dwImageSize,
-		(LPBYTE)code.Final_MutMemory, code.Final_CodeSize,
-			pFinalBuf, dwFinalBufSize);
+	objPE.MergeBuf(objPE.m_pFileBuf, objPE.m_dwImageSize,
+		(LPBYTE)Final_MutMemory, code_again.Final_CodeSize,
+		pFinalBuf, dwFinalBufSize);
+	
 	//4.保存文件（处理完成的缓冲区）
 	SaveFinalFile(pFinalBuf, dwFinalBufSize, filepath);
 	//5.释放资源
-	VirtualFree(objPE.m_pFileBuf, 0, MEM_DECOMMIT);
-	VirtualFree(pFinalBuf, 0, MEM_DECOMMIT);
-	//VirtualFree(code.Final_MutMemory, 0, MEM_DECOMMIT);
+	VirtualFree(objPE.m_pFileBuf, 0, MEM_RELEASE);
+	VirtualFree(pFinalBuf, 0, MEM_RELEASE);
+	//VirtualFree(code.Final_MutMemory, 0, MEM_RELEASE);
 	//delete[] objPE.m_pFileBuf;
 	//delete[] pFinalBuf;
 	//free(code.Final_MutMemory);
@@ -381,7 +377,7 @@ UINT x86Insn_Mutation::Update_Mem()
 	}
 	memcpy_s(Final_MutMemory, FinalMem_Size, temp, temp_size);
 	FinalRemainMem_Size = FinalMem_Size - temp_size;
-	VirtualFree(temp, 0, MEM_DECOMMIT);
+	VirtualFree(temp, 0, MEM_RELEASE);
 
 	//更新几个vector里的需要改变的绝对地址
 	size_t differ = (size_t)Final_MutMemory - (size_t)temp;
