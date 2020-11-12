@@ -48,6 +48,7 @@ void x86Insn_Mutation::InitValue()
 }
 
 
+
 void Mutation::Start(CString filepath)
 {
 	//CPE	objPE;
