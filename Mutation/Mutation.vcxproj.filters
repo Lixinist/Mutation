@@ -39,6 +39,9 @@
     <ClCompile Include="MutationDlg.cpp">
       <Filter>源文件\MFC</Filter>
     </ClCompile>
+    <ClCompile Include="rand_order.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Mutation.rc">
@@ -69,6 +72,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="define.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="rand_order.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

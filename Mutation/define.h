@@ -119,12 +119,12 @@ UINT _pop_mem_16(x86_mem* mem0);\
 \
 virtual UINT _call();\
 UINT _call_reg(x86_reg op0);\
-UINT _call_imm(x86_jcc* jcc0);\
+virtual UINT _call_imm(x86_jcc* jcc0);\
 UINT _call_mem(x86_mem* mem0);\
 \
-UINT _jcc_jmp();\
+virtual UINT _jcc_jmp();\
 UINT _jmp_reg(x86_reg op0);\
-UINT _jmp_imm(x86_jcc* jcc0);\
+virtual UINT _jmp_imm(x86_jcc* jcc0);\
 UINT _jmp_mem(x86_mem* mem0);\
 \
 UINT _je(x86_jcc* jcc0);\
@@ -149,8 +149,8 @@ UINT _jnge(x86_jcc* jcc0);\
 UINT _jnl(x86_jcc* jcc0);\
 UINT _jnle(x86_jcc* jcc0);\
 UINT _jno(x86_jcc* jcc0);\
-UINT _jnp(x86_jcc* jcc0);\
-UINT _jns(x86_jcc* jcc0);\
+virtual UINT _jnp(x86_jcc* jcc0);\
+virtual UINT _jns(x86_jcc* jcc0);\
 UINT _jnz(x86_jcc* jcc0);\
 UINT _jo(x86_jcc* jcc0);\
 UINT _jp(x86_jcc* jcc0);\

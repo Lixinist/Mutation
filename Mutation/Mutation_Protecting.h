@@ -3,10 +3,12 @@
 #include <capstone/capstone.h>
 #include "PE.h"
 #include "define.h"
+
 using namespace std;
 using namespace asmjit;
 
 typedef struct _imm {
+	//imm Operand专用结构体
 	DWORD		address;
 	DWORD		imm_value;
 	uint8_t		imm_offset;
@@ -14,6 +16,7 @@ typedef struct _imm {
 
 }x86_imm, *P_x86_imm;
 typedef struct _mem {
+	//mem Operand专用结构体
 	DWORD		address;
 	uint8_t		disp_offset;
 	uint8_t		disp_size;
@@ -25,6 +28,7 @@ typedef struct _mem {
 
 }x86_mem, *P_x86_mem;
 typedef struct _jcc {
+	//jcc指令专用结构体
 	DWORD		address;
 	DWORD		Target_JumpAddr;
 	uint8_t		imm_offset;
@@ -33,13 +37,17 @@ typedef struct _jcc {
 }x86_jcc, *P_x86_jcc;
 typedef struct _jcc_FixOffset
 {
+	//此struct用于修复jcc unknown_address和call unknown_address
+	//生成的变异代码jcc的地址
 	DWORD		address;
+	//原代码jcc的目标跳转地址
 	DWORD		Target_JumpAddr;
 	uint8_t		imm_offset;
-
 } FixOffset, *P_FixOffset;
 typedef struct _CallAdd_FixOffset
 {
+	//重定位会用到call，add指令的组合
+	//此struct用于在二次变异中特殊处理被用于重定位的call，add指令
 	DWORD		Call_Addr;
 	DWORD		Add_Addr;
 	DWORD		FixedOffset;
@@ -47,9 +55,9 @@ typedef struct _CallAdd_FixOffset
 //static vector<FixOffset> Fix_Offset;
 
 
-
 class Mutation;
 class x86Insn_Mutation;
+class x86Insn_Mutation_again;
 class Mutation
 {
 public:
@@ -81,7 +89,7 @@ public:
 	//开始变异
 	void	Start_Mutation(x86Insn_Mutation& code);
 	//jmp连接首尾
-	void	link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Addr);
+	virtual void	link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Addr);
 	//清除原代码
 	void	ClearCode(LPBYTE Start_Addr, LPBYTE End_Addr);
 
@@ -103,8 +111,6 @@ public:
 	csh			handle;
 	cs_insn		insn;
 	vector<Mark>Mut_Mark_again;
-	//BOOL again_flag;
-
 
 	//用于变异代码重定位的基地址
 	//void* BaseAddress;
@@ -131,6 +137,8 @@ public:
 		DWORD		Raw_CodeAddr;
 		//变异代码块起始地址
 		DWORD		Mut_CodeStartAddr;
+		//变异代码块偏移地址
+		DWORD		Mut_CodeOffsetAddr;
 		//变异代码块大小
 		size_t		Mut_CodeSize;
 		//变异代码块尾部（下一个变异代码块的起始处）
@@ -151,7 +159,7 @@ public:
 	}
 public:
 	//针对每段代码进行反汇编
-	BOOL	Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End, LPBYTE Jmp_Start, LPBYTE Jmp_End);
+	virtual BOOL	Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End, LPBYTE Jmp_Start, LPBYTE Jmp_End);
 	//针对单行指令开始变异
 	UINT	Mutation_SingleCode();
 	//判断指令类型
@@ -173,8 +181,6 @@ public:
 	//转换jcc目标跳转地址为实际地址
 	virtual UINT	Jcc_ActuAddr(DWORD Target_JumpAddr);
 	
-	UINT	reloc();
-
 	x86_MutationRule
 	x86Insn_Class;
 };
@@ -190,6 +196,7 @@ public:
 public:
 	void* old_Final_MutMemory;
 	vector<CA_FixOffset> old_Fix_Offset;
+	
 	//继承成员数据
 	x86Insn_Mutation_again& operator=(const x86Insn_Mutation& code) {
 		//FinalMem_Size = code.FinalMem_Size;

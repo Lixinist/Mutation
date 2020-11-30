@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Mutation_Protecting.h"
 #include "auxiliary_function.h"
+#include "rand_order.h"
 
 UINT x86Insn_Mutation::_mov()
 {
@@ -970,6 +971,33 @@ UINT x86Insn_Mutation_again::_add()
 
 	return result;
 }
+UINT rand_order::_add()
+{
+	UINT result = -1;
+	cs_x86* x86;
+	if (insn.detail == NULL)
+		return result;
+	x86 = &(insn.detail->x86);
+	x86_mem mem = { 0 };
+	x86_imm imm = { 0 };
+	x86::Assembler a(&Mut_Code);
+	Label L0 = a.newLabel();
+
+	if (x86->op_count == 2) {
+		//add reg,imm
+		if (x86->operands[0].type == X86_OP_REG && x86->operands[1].type == X86_OP_IMM) {
+			for (auto& c : old_Fix_Offset) {
+				if (c.Add_Addr == insn.address) {
+					a.add(to_asmjit_reg(x86->operands[0].reg), (UINT)c.FixedOffset);
+					return(Add_FixOffset);
+				}
+			}
+		}
+	}
+
+	return result;
+}
+
 //op只支持eax，ebx，ecx，edx，ebp等x32位寄存器（不支持esp）。
 UINT x86Insn_Mutation::_add_reg_reg(x86_reg op0, x86_reg op1)
 {
@@ -5917,7 +5945,7 @@ UINT x86Insn_Mutation_again::_call()
 		for (auto &c : old_Fix_Offset) {
 			if (c.Call_Addr == insn.address) {
 				a.call(L0);
-				size_t	Temp_CodeSize = Mut_Code.codeSize() + Final_CodeSize;
+				size_t	Temp_CodeSize = Mut_Code.codeSize() + SingMut_Sec.Mut_CodeOffsetAddr;
 				c.FixedOffset = Temp_CodeSize;
 				a.bind(L0);
 				return(Call_FixOffset);
@@ -5946,6 +5974,40 @@ UINT x86Insn_Mutation_again::_call()
 		return(_call_mem(&mem));
 	}
 
+	return result;
+}
+UINT rand_order::_call()
+{
+	UINT result = -1;
+	cs_x86* x86;
+	if (insn.detail == NULL)
+		return result;
+	x86 = &(insn.detail->x86);
+	x86_jcc jcc = { 0 };
+	x86_mem mem = { 0 };
+	x86::Assembler a(&Mut_Code);
+	Label L0 = a.newLabel();
+
+
+	//call imm
+	if (x86->operands[0].type == X86_OP_IMM) {
+		for (auto& c : old_Fix_Offset) {
+			if (c.Call_Addr == insn.address) {
+				a.call(L0);
+				size_t	Temp_CodeSize = Mut_Code.codeSize() + SingMut_Sec.Mut_CodeOffsetAddr;
+				c.FixedOffset = Temp_CodeSize;
+				a.bind(L0);
+				return(Call_FixOffset);
+			}
+		}
+
+		jcc.address = (DWORD)insn.address;
+		jcc.imm_offset = x86->encoding.imm_offset;
+		jcc.imm_size = x86->encoding.imm_size;
+		jcc.Target_JumpAddr = (DWORD)x86->operands[0].imm;
+		return(_call_imm(&jcc));
+	}
+	
 	return result;
 }
 
@@ -6149,7 +6211,7 @@ UINT x86Insn_Mutation::_call_imm(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -6199,6 +6261,73 @@ UINT x86Insn_Mutation::_call_imm(x86_jcc* jcc0)
 	}
 	return call_imm;
 }
+UINT rand_order::_call_imm(x86_jcc* jcc0)
+{
+	DWORD address = jcc0->address;
+	uint8_t imm_offset = jcc0->imm_offset;
+	uint8_t imm_size = jcc0->imm_size;
+	DWORD Target_JumpAddr = jcc0->Target_JumpAddr;
+
+
+	x86::Assembler a(&Mut_Code);
+	bool flag = false;
+	//取出jcc的offset地址和offset
+	DWORD offset_Addr = address + imm_offset;
+	DWORD offset = 0;
+	memcpy_s(&offset, imm_size, (void*)offset_Addr, imm_size);
+	//判断目标跳转地址是不是在Mutation保护标志范围内
+	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
+		//在保护范围
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
+			flag = true;
+			break;
+		}
+	}
+
+	//目标跳转地址不在保护范围内
+	if (flag == false)
+	{
+		//原call
+		a.call(Jcc_ActuAddr(Target_JumpAddr));
+	}
+	CodeBuffer& buffer = Mut_Code.sectionById(0)->buffer();
+	//目标跳转地址在保护范围内
+	if (flag == true)
+	{
+		//----------------------------------------------------------------------------------------------------------------
+		//2.1判断是否已经生成目标地址
+		bool flag_2 = false;
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+			//已经生成，修改目标跳转地址
+			if (Target_JumpAddr == iter->Raw_CodeAddr) {
+				flag_2 = true;
+				Target_JumpAddr = iter->BaseAddr;
+				break;
+			}
+		}
+		//2.2已经生成目标地址
+		if (flag_2 == true)
+		{
+			a.call((UINT)Target_JumpAddr);
+		}
+		//2.3还没有生成目标地址
+		if (flag_2 == false)
+		{
+			a.call(Unknown_Address);
+			size_t Temp_CodeSize = Mut_Code.codeSize();
+			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
+			FixOffset FO_Struct = { 0 };
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
+			FO_Struct.Target_JumpAddr = Target_JumpAddr;
+			FO_Struct.imm_offset = 1;
+			Fix_Offset.push_back(FO_Struct);
+		}
+		
+	}
+	return call_imm;
+}
+
+
 //转换成call eax，会损失eax寄存器
 UINT x86Insn_Mutation::_call_mem(x86_mem* mem0)
 {
@@ -6413,21 +6542,98 @@ UINT x86Insn_Mutation::_jcc_jmp()
 
 	return result;
 }
-
-UINT x86Insn_Mutation::_jmp_reg(x86_reg op0)
+UINT rand_order::_jcc_jmp()
 {
-	x86::Assembler a(&Mut_Code);
-	if (Check_Reg(op0) == false)
-		throw "传入的reg错误";
-	auto reg_op0 = to_asmjit_reg(op0);
-	//a.jmp(reg_op0);
-	int randsum = rand() % 4 + 1;
-	for (int i = 0; i < randsum; i++)
-		a.push(reg_op0);
-	a.ret(4 * (randsum - 1));
+	UINT result = -1;
+	cs_x86* x86;
+	if (insn.detail == NULL)
+		return result;
+	x86 = &(insn.detail->x86);
+	x86_jcc jcc = { 0 };
+	x86_mem mem = { 0 };
 
-	//其实还有jmp ax这种情况，但是在x32里不会有这种代码，所以不考虑了。
-	return jmp_reg;
+	//jmp:
+	if (strcmp(insn.mnemonic, "jmp") == 0) {
+		//jmp imm
+		if (x86->operands[0].type == X86_OP_IMM) {
+			jcc.address = (DWORD)insn.address;
+			jcc.imm_offset = x86->encoding.imm_offset;
+			jcc.imm_size = x86->encoding.imm_size;
+			jcc.Target_JumpAddr = (DWORD)x86->operands[0].imm;
+			return(_jmp_imm(&jcc));
+		}
+	}
+
+
+	//jcc:
+	jcc.address = (DWORD)insn.address;
+	jcc.imm_offset = x86->encoding.imm_offset;
+	jcc.imm_size = x86->encoding.imm_size;
+	jcc.Target_JumpAddr = (DWORD)x86->operands[0].imm;
+	if (strcmp(insn.mnemonic, "je") == 0)
+		return(_je(&jcc));
+	if (strcmp(insn.mnemonic, "jne") == 0)
+		return(_jne(&jcc));
+	if (strcmp(insn.mnemonic, "ja") == 0)
+		return(_ja(&jcc));
+	if (strcmp(insn.mnemonic, "jae") == 0)
+		return(_jae(&jcc));
+	if (strcmp(insn.mnemonic, "jb") == 0)
+		return(_jb(&jcc));
+	if (strcmp(insn.mnemonic, "jbe") == 0)
+		return(_jbe(&jcc));
+	if (strcmp(insn.mnemonic, "jc") == 0)
+		return(_jc(&jcc));
+	if (strcmp(insn.mnemonic, "jecxz") == 0)
+		return(_jecxz(&jcc));
+	if (strcmp(insn.mnemonic, "jg") == 0)
+		return(_jg(&jcc));
+	if (strcmp(insn.mnemonic, "jge") == 0)
+		return(_jge(&jcc));
+	if (strcmp(insn.mnemonic, "jl") == 0)
+		return(_jl(&jcc));
+	if (strcmp(insn.mnemonic, "jle") == 0)
+		return(_jle(&jcc));
+	if (strcmp(insn.mnemonic, "jna") == 0)
+		return(_jna(&jcc));
+	if (strcmp(insn.mnemonic, "jnae") == 0)
+		return(_jnae(&jcc));
+	if (strcmp(insn.mnemonic, "jnb") == 0)
+		return(_jnb(&jcc));
+	if (strcmp(insn.mnemonic, "jnbe") == 0)
+		return(_jnbe(&jcc));
+	if (strcmp(insn.mnemonic, "jnc") == 0)
+		return(_jnc(&jcc));
+	if (strcmp(insn.mnemonic, "jng") == 0)
+		return(_jng(&jcc));
+	if (strcmp(insn.mnemonic, "jnge") == 0)
+		return(_jnge(&jcc));
+	if (strcmp(insn.mnemonic, "jnl") == 0)
+		return(_jnl(&jcc));
+	if (strcmp(insn.mnemonic, "jnle") == 0)
+		return(_jnle(&jcc));
+	if (strcmp(insn.mnemonic, "jno") == 0)
+		return(_jno(&jcc));
+	if (strcmp(insn.mnemonic, "jnp") == 0)
+		return(_jnp(&jcc));
+	if (strcmp(insn.mnemonic, "jns") == 0)
+		return(_jns(&jcc));
+	if (strcmp(insn.mnemonic, "jnz") == 0)
+		return(_jnz(&jcc));
+	if (strcmp(insn.mnemonic, "jo") == 0)
+		return(_jo(&jcc));
+	if (strcmp(insn.mnemonic, "jp") == 0)
+		return(_jp(&jcc));
+	if (strcmp(insn.mnemonic, "jpe") == 0)
+		return(_jpe(&jcc));
+	if (strcmp(insn.mnemonic, "jpo") == 0)
+		return(_jpo(&jcc));
+	if (strcmp(insn.mnemonic, "js") == 0)
+		return(_js(&jcc));
+	if (strcmp(insn.mnemonic, "jz") == 0)
+		return(_jz(&jcc));
+
+	return result;
 }
 
 UINT x86Insn_Mutation::_jmp_imm(x86_jcc* jcc0)
@@ -6574,7 +6780,7 @@ UINT x86Insn_Mutation::_jmp_imm(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -6625,7 +6831,90 @@ UINT x86Insn_Mutation::_jmp_imm(x86_jcc* jcc0)
 	}
 	return jmp_imm;
 #undef jcc
-#undef eflag_offset
+}
+UINT rand_order::_jmp_imm(x86_jcc* jcc0)
+{
+#define jcc jmp
+
+	DWORD address = jcc0->address;
+	uint8_t imm_offset = jcc0->imm_offset;
+	uint8_t imm_size = jcc0->imm_size;
+	DWORD Target_JumpAddr = jcc0->Target_JumpAddr;
+
+
+	x86::Assembler a(&Mut_Code);
+	bool flag = false;
+	//取出jcc的offset地址和offset
+	DWORD offset_Addr = address + imm_offset;
+	DWORD offset = 0;
+	memcpy_s(&offset, imm_size, (void*)offset_Addr, imm_size);
+	//判断目标跳转地址是不是在Mutation保护标志范围内
+	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
+		//在保护范围
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
+			flag = true;
+			break;
+		}
+	}
+	//目标跳转地址不在保护范围内
+	if (flag == false)
+	{
+		//*这里要根据每个jcc指令修改，
+		a.jcc(Jcc_ActuAddr(Target_JumpAddr));
+	}
+	CodeBuffer& buffer = Mut_Code.sectionById(0)->buffer();
+	//目标跳转地址在保护范围内
+	if (flag == true)
+	{
+		//----------------------------------------------------------------------------------------------------------------
+		//2.1判断是否已经生成目标地址
+		bool flag_2 = false;
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+			//已经生成，修改目标跳转地址
+			if (Target_JumpAddr == iter->Raw_CodeAddr) {
+				flag_2 = true;
+				Target_JumpAddr = iter->BaseAddr;
+				break;
+			}
+		}
+		//2.2已经生成目标地址
+		if (flag_2 == true)
+		{
+			a.jcc(Target_JumpAddr);
+		}
+		//2.3还没有生成目标地址
+		if (flag_2 == false)
+		{
+			a.jcc(Unknown_Address);
+			size_t Temp_CodeSize = Mut_Code.codeSize();
+			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
+			FixOffset FO_Struct = { 0 };
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
+			FO_Struct.Target_JumpAddr = Target_JumpAddr;
+			FO_Struct.imm_offset = 1;
+			Fix_Offset.push_back(FO_Struct);
+		}
+
+	}
+	return jmp_imm;
+#undef jcc
+}
+
+
+UINT x86Insn_Mutation::_jmp_reg(x86_reg op0)
+{
+	x86::Assembler a(&Mut_Code);
+	if (Check_Reg(op0) == false)
+		throw "传入的reg错误";
+	auto reg_op0 = to_asmjit_reg(op0);
+	//a.jmp(reg_op0);
+	int randsum = rand() % 4 + 1;
+	for (int i = 0; i < randsum; i++)
+		a.push(reg_op0);
+	a.ret(4 * (randsum - 1));
+
+	//其实还有jmp ax这种情况，但是在x32里不会有这种代码，所以不考虑了。
+	return jmp_reg;
 }
 
 UINT x86Insn_Mutation::_jmp_mem(x86_mem* mem0)
@@ -6859,7 +7148,7 @@ UINT x86Insn_Mutation::_je(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -7060,7 +7349,7 @@ UINT x86Insn_Mutation::_jne(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -7271,7 +7560,7 @@ UINT x86Insn_Mutation::_ja(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -7472,7 +7761,7 @@ UINT x86Insn_Mutation::_jae(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -7673,7 +7962,7 @@ UINT x86Insn_Mutation::_jb(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -7886,7 +8175,7 @@ UINT x86Insn_Mutation::_jbe(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -8087,7 +8376,7 @@ UINT x86Insn_Mutation::_jc(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -8304,7 +8593,7 @@ UINT x86Insn_Mutation::_jecxz(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -8523,7 +8812,7 @@ UINT x86Insn_Mutation::_jg(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -8736,7 +9025,7 @@ UINT x86Insn_Mutation::_jge(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -8951,7 +9240,7 @@ UINT x86Insn_Mutation::_jl(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -9172,7 +9461,7 @@ UINT x86Insn_Mutation::_jle(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -9385,7 +9674,7 @@ UINT x86Insn_Mutation::_jna(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -9586,7 +9875,7 @@ UINT x86Insn_Mutation::_jnae(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -9787,7 +10076,7 @@ UINT x86Insn_Mutation::_jnb(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -9998,7 +10287,7 @@ UINT x86Insn_Mutation::_jnbe(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -10199,7 +10488,7 @@ UINT x86Insn_Mutation::_jnc(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -10420,7 +10709,7 @@ UINT x86Insn_Mutation::_jng(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -10635,7 +10924,7 @@ UINT x86Insn_Mutation::_jnge(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -10848,7 +11137,7 @@ UINT x86Insn_Mutation::_jnl(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -11067,7 +11356,7 @@ UINT x86Insn_Mutation::_jnle(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -11268,7 +11557,7 @@ UINT x86Insn_Mutation::_jno(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -11469,7 +11758,7 @@ UINT x86Insn_Mutation::_jnp(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -11522,6 +11811,74 @@ UINT x86Insn_Mutation::_jnp(x86_jcc* jcc0)
 #undef jcc
 #undef eflag_offset
 }
+UINT rand_order::_jnp(x86_jcc* jcc0)
+{
+#define jcc jnp
+
+	DWORD address = jcc0->address;
+	uint8_t imm_offset = jcc0->imm_offset;
+	uint8_t imm_size = jcc0->imm_size;
+	DWORD Target_JumpAddr = jcc0->Target_JumpAddr;
+
+
+	x86::Assembler a(&Mut_Code);
+	bool flag = false;
+	//取出jcc的offset地址和offset
+	DWORD offset_Addr = address + imm_offset;
+	DWORD offset = 0;
+	memcpy_s(&offset, imm_size, (void*)offset_Addr, imm_size);
+	//判断目标跳转地址是不是在Mutation保护标志范围内
+	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
+		//在保护范围
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
+			flag = true;
+			break;
+		}
+	}
+	//目标跳转地址不在保护范围内
+	if (flag == false)
+	{
+		//*这里要根据每个jcc指令修改，
+		a.jcc(Jcc_ActuAddr(Target_JumpAddr));
+	}
+	CodeBuffer& buffer = Mut_Code.sectionById(0)->buffer();
+	//目标跳转地址在保护范围内
+	if (flag == true)
+	{
+		//----------------------------------------------------------------------------------------------------------------
+		//2.1判断是否已经生成目标地址
+		bool flag_2 = false;
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+			//已经生成，修改目标跳转地址
+			if (Target_JumpAddr == iter->Raw_CodeAddr) {
+				flag_2 = true;
+				Target_JumpAddr = iter->BaseAddr;
+				break;
+			}
+		}
+		//2.2已经生成目标地址
+		if (flag_2 == true)
+		{
+			a.jcc(Target_JumpAddr);
+		}
+		//2.3还没有生成目标地址
+		if (flag_2 == false)
+		{
+			a.jcc(Unknown_Address);
+			size_t Temp_CodeSize = Mut_Code.codeSize();
+			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
+			FixOffset FO_Struct = { 0 };
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 6;
+			FO_Struct.Target_JumpAddr = Target_JumpAddr;
+			FO_Struct.imm_offset = 2;
+			Fix_Offset.push_back(FO_Struct);
+		}
+		
+	}
+	return jcc;
+#undef jcc
+}
+
 
 UINT x86Insn_Mutation::_jns(x86_jcc* jcc0)
 {
@@ -11670,7 +12027,7 @@ UINT x86Insn_Mutation::_jns(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -11723,6 +12080,74 @@ UINT x86Insn_Mutation::_jns(x86_jcc* jcc0)
 #undef jcc
 #undef eflag_offset
 }
+UINT rand_order::_jns(x86_jcc* jcc0)
+{
+#define jcc jns
+
+	DWORD address = jcc0->address;
+	uint8_t imm_offset = jcc0->imm_offset;
+	uint8_t imm_size = jcc0->imm_size;
+	DWORD Target_JumpAddr = jcc0->Target_JumpAddr;
+
+
+	x86::Assembler a(&Mut_Code);
+	bool flag = false;
+	//取出jcc的offset地址和offset
+	DWORD offset_Addr = address + imm_offset;
+	DWORD offset = 0;
+	memcpy_s(&offset, imm_size, (void*)offset_Addr, imm_size);
+	//判断目标跳转地址是不是在Mutation保护标志范围内
+	for (auto iter = Mut_Mark.begin(); iter != Mut_Mark.end(); iter++) {
+		//在保护范围
+		if (Target_JumpAddr >= (DWORD)iter->Protected_Start && Target_JumpAddr <= (DWORD)iter->Protected_End) {
+			flag = true;
+			break;
+		}
+	}
+	//目标跳转地址不在保护范围内
+	if (flag == false)
+	{
+		//*这里要根据每个jcc指令修改，
+		a.jcc(Jcc_ActuAddr(Target_JumpAddr));
+	}
+	CodeBuffer& buffer = Mut_Code.sectionById(0)->buffer();
+	//目标跳转地址在保护范围内
+	if (flag == true)
+	{
+		//----------------------------------------------------------------------------------------------------------------
+		//2.1判断是否已经生成目标地址
+		bool flag_2 = false;
+		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+			//已经生成，修改目标跳转地址
+			if (Target_JumpAddr == iter->Raw_CodeAddr) {
+				flag_2 = true;
+				Target_JumpAddr = iter->BaseAddr;
+				break;
+			}
+		}
+		//2.2已经生成目标地址
+		if (flag_2 == true)
+		{
+			a.jcc(Target_JumpAddr);
+		}
+		//2.3还没有生成目标地址
+		if (flag_2 == false)
+		{
+			a.jcc(Unknown_Address);
+			size_t Temp_CodeSize = Mut_Code.codeSize();
+			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
+			FixOffset FO_Struct = { 0 };
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 6;
+			FO_Struct.Target_JumpAddr = Target_JumpAddr;
+			FO_Struct.imm_offset = 2;
+			Fix_Offset.push_back(FO_Struct);
+		}
+		
+	}
+	return jcc;
+#undef jcc
+}
+
 
 UINT x86Insn_Mutation::_jnz(x86_jcc* jcc0)
 {
@@ -11871,7 +12296,7 @@ UINT x86Insn_Mutation::_jnz(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -12072,7 +12497,7 @@ UINT x86Insn_Mutation::_jo(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -12273,7 +12698,7 @@ UINT x86Insn_Mutation::_jp(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -12474,7 +12899,7 @@ UINT x86Insn_Mutation::_jpe(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -12675,7 +13100,7 @@ UINT x86Insn_Mutation::_jpo(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -12876,7 +13301,7 @@ UINT x86Insn_Mutation::_js(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);
@@ -13077,7 +13502,7 @@ UINT x86Insn_Mutation::_jz(x86_jcc* jcc0)
 			size_t Temp_CodeSize = Mut_Code.codeSize();
 			//将当前jcc信息写入vector，在Target_JumpAddr地址的指令变异前会对jcc_offset修复
 			FixOffset FO_Struct = { 0 };
-			FO_Struct.address = (DWORD)Final_MutMemory + Final_CodeSize + Temp_CodeSize - 5;
+			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
 			Fix_Offset.push_back(FO_Struct);

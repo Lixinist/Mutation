@@ -66,7 +66,8 @@ BOOL CPE::InitPE(CString strFilePath)
 	m_pFileBuf = (LPBYTE)VirtualAlloc(NULL, m_dwFileSize, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 	//m_pFileBuf = new BYTE[m_dwFileSize];
 	DWORD ReadSize = 0;
-	ReadFile(m_hFile, m_pFileBuf, m_dwFileSize, &ReadSize, NULL);	
+	if (ReadFile(m_hFile, m_pFileBuf, m_dwFileSize, &ReadSize, NULL) == FALSE)
+		return FALSE;
 	CloseHandle(m_hFile);
 	m_hFile = NULL;
 
@@ -85,7 +86,6 @@ BOOL CPE::InitPE(CString strFilePath)
 		m_dwImageSize = (m_dwImageSize / m_dwMemAlign + 1) * m_dwMemAlign;
 	//这里申请2倍内存是为了方便增加重定位区段大小
 	LPBYTE pFileBuf_New = (LPBYTE)VirtualAlloc(NULL, m_dwImageSize * 2, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-	//LPBYTE pFileBuf_New = new BYTE[m_dwImageSize];
 	memset(pFileBuf_New, 0, m_dwImageSize * 2);
 	//拷贝文件头
 	memcpy_s(pFileBuf_New, m_dwSizeOfHeader, m_pFileBuf, m_dwSizeOfHeader);

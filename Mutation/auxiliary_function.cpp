@@ -29,13 +29,13 @@ BOOL x86Insn_Mutation::RelocData_imm_mem(DWORD DataAddr, IN OUT x86::Gp base_reg
 
 				a.pushfd();
 				a.push(rand0);
-				size_t	Call_CodeSize = Mut_Code.codeSize() + Final_CodeSize;
+				size_t	Call_CodeSize = Mut_Code.codeSize() + SingMut_Sec.Mut_CodeOffsetAddr;
 				a.call(L0);
-				size_t	Temp_CodeSize = Mut_Code.codeSize() + Final_CodeSize;
+				size_t	Temp_CodeSize = Mut_Code.codeSize() + SingMut_Sec.Mut_CodeOffsetAddr;
 				a.bind(L0);
 				a.mov(rand0, 0);
 				a.add(rand0, (UINT)objPE.m_dwImageSize);	//-镜像模块大小-自己代码的偏移（相对自己区段）
-				size_t	Add_CodeSize = Mut_Code.codeSize() + Final_CodeSize;
+				size_t	Add_CodeSize = Mut_Code.codeSize() + SingMut_Sec.Mut_CodeOffsetAddr;
 				a.add(rand0, (UINT)Temp_CodeSize);
 				a.sub(ptr(x86::esp), rand0);
 				a.pop(base_reg);							//基地址pop到base_reg
@@ -188,8 +188,8 @@ UINT x86Insn_Mutation::Fix_JmpOffset()
 			jcc_addr = c.address;
 			imm_offset = c.imm_offset;
 			//让jns，jnp重定位跳向 当前指令的变异代码的地址
-			//公式： jcc_addr + imm_offset + imm_size + jcc_offset = target_addr(Final_MutMemory + Final_CodeSize)
-			jcc_offset = ((DWORD)Final_MutMemory + Final_CodeSize) - imm_offset - 4 - jcc_addr;
+			//公式： jcc_addr + imm_offset + imm_size + jcc_offset = target_addr(SingMut_Sec.Mut_CodeStartAddr)
+			jcc_offset = SingMut_Sec.Mut_CodeStartAddr - imm_offset - 4 - jcc_addr;
 			//写入jns，jnp的offset
 			memcpy_s((void*)(jcc_addr + imm_offset), 4, &jcc_offset, 4);
 		}
