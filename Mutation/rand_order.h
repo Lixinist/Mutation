@@ -46,10 +46,9 @@ public:
 	//双指针指向mem首尾
 	void*		phead_mem;
 	void*		ptail_mem;
-	//void*		temp_head;
-	//void*		temp_tail;
 	Order_FixJcc Order_FixOffset;
 	OrderedInsns Ordered_Insns;
+	void*		plink_jmp;
 
 	//继承成员数据
 	rand_order& operator=(const x86Insn_Mutation_again& code) {

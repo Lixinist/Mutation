@@ -6007,7 +6007,7 @@ UINT rand_order::_call()
 		jcc.Target_JumpAddr = (DWORD)x86->operands[0].imm;
 		return(_call_imm(&jcc));
 	}
-	
+	//call mem在之前的变异中被消除了
 	return result;
 }
 
@@ -6562,6 +6562,7 @@ UINT rand_order::_jcc_jmp()
 			jcc.Target_JumpAddr = (DWORD)x86->operands[0].imm;
 			return(_jmp_imm(&jcc));
 		}
+		//jmp mem在之前的变异中被消除了
 	}
 
 

@@ -2,6 +2,7 @@
 #include "rand_order.h"
 #define head_maxsize 6
 #define tail_maxsize 16
+#define link_jmpsize 5
 /*
 * 乱序这一步必须放在变异完成之后，不能单独用乱序
 */
@@ -74,7 +75,7 @@ UINT rand_order::Order_ManyCode()
 	else {
 		for (size_t i = 0; i < Ordered_Insns.nums; i++)
 			body_maxsize += Ordered_Insns.order_insn[Ordered_Insns.index + i].size;
-		Total_MaxCodesize = head_maxsize + body_maxsize + tail_maxsize;
+		Total_MaxCodesize = head_maxsize + body_maxsize + tail_maxsize + link_jmpsize;
 		Ord_CodeHeadAddr = (DWORD)GetTargetAddress(Total_MaxCodesize);
 	}
 
@@ -97,7 +98,7 @@ UINT rand_order::Order_ManyCode()
 	//乱序段尾
 	DWORD Tail_CodeStartAddr = Ord_CodeHeadAddr + MadeCodesize;
 	MadeCodesize += MakeOrderTail(Tail_CodeStartAddr);
-	if (MadeCodesize > Total_MaxCodesize) {
+	if (MadeCodesize > Total_MaxCodesize - link_jmpsize) {
 		MessageBox(NULL, _T("实际生成的代码大小超过预测的代码大小"), NULL, NULL);
 	}
 	
@@ -314,6 +315,9 @@ size_t rand_order::MakeOrderTail(DWORD CodeStartAddr)
 		MessageBox(NULL, _T("乱序段尾部大小错误"), NULL, NULL);
 	}
 	Mut_Code.reset();
+	//留一个5字节大小的空间给写link_jmp
+	plink_jmp = (void*)(CodeStartAddr + codesize);
+
 	return codesize;
 
 }
@@ -452,6 +456,22 @@ void* rand_order::GetTargetAddress(DWORD codesize)
 }
 
 void rand_order::link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Addr)
-{
-	int a = 0b11'1111;
+{	//只要知道其中一个地址和偏移即可
+	//	start_link，往下跳
+	if (flag == 1)
+	{
+		//偏移 =   整块镜像内存 - Addr + CodeSize - 5
+		DWORD data = (DWORD)objPE.m_pFileBuf + objPE.m_dwImageSize - (DWORD)Addr + code.Final_CodeSize - 5;
+		memcpy_s(Addr, 1, "\xE9", 1);
+		memcpy_s(Addr + 1, 4, &data, 4);
+	}
+	else
+		//	end_link，往上跳。由于添加了代码，还要修改一些成员变量
+	{
+		//偏移 = -(整块镜像内存 - Addr + jmp相对自己区段的偏移) - 5
+		//DWORD data = (DWORD)Addr - (DWORD)objPE.m_pFileBuf - objPE.m_dwImageSize - code.Final_CodeSize - 5;
+		DWORD data = (DWORD)Addr - ((DWORD)objPE.m_pFileBuf + objPE.m_dwImageSize) - ((DWORD)plink_jmp - (DWORD)Final_MutMemory) - 5;
+		memcpy_s(plink_jmp, 1, "\xE9", 1);
+		memcpy_s((void*)((size_t)plink_jmp + 1), 4, &data, 4);
+	}
 }

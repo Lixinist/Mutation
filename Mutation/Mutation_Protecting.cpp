@@ -449,7 +449,7 @@ void Mutation::link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Add
 		memcpy_s(Addr + 1, 4, &data, 4);
 	}
 	else
-		//	end_link，往上跳。由于添加了代码，还要修改一些成员变量
+	//	end_link，往上跳。由于添加了代码，还要修改一些成员变量
 	{
 		//偏移 = -(整块镜像内存 - Addr + CodeSize) - 5
 		DWORD data = (DWORD)Addr - (DWORD)objPE.m_pFileBuf - objPE.m_dwImageSize - code.Final_CodeSize - 5;
