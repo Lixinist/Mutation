@@ -100,7 +100,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <AdditionalLibraryDirectories>..\Lib;</AdditionalLibraryDirectories>
-      <AdditionalDependencies>capstone_debug.lib;asmjit_debug.lib</AdditionalDependencies>
+      <AdditionalDependencies>capstone.lib;asmjit.lib</AdditionalDependencies>
     </Link>
     <Midl>
       <MkTypLibCompatible>false</MkTypLibCompatible>

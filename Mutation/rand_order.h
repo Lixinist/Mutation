@@ -36,11 +36,12 @@ public:
 
 	//UINT	Copy_OrdCodes_to_FinalMem(BOOL copy_flag, DWORD codesize);
 	//UINT	Update_Mem();
-	void	link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Addr);
+	//void	link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Addr);
 	void*	GetTargetAddress(DWORD dwsize);
 
 public:
 	BOOL		firstcode_flag;
+	BOOL		endcode_flag;
 	//放在首or尾
 	int			place_flag;
 	//双指针指向mem首尾
@@ -48,10 +49,17 @@ public:
 	void*		ptail_mem;
 	Order_FixJcc Order_FixOffset;
 	OrderedInsns Ordered_Insns;
-	void*		plink_jmp;
+	//void*		plink_jmp;
 
 	//继承成员数据
 	rand_order& operator=(const x86Insn_Mutation_again& code) {
+		old_Final_MutMemory = code.Final_MutMemory;
+		old_Fix_Offset = code.CA_Fix_Offset;
+		objPE = code.objPE;
+		Mut_Mark = code.Mut_Mark_again;
+		return *this;
+	}
+	rand_order& operator=(const x86Insn_Mutation& code) {
 		old_Final_MutMemory = code.Final_MutMemory;
 		old_Fix_Offset = code.CA_Fix_Offset;
 		objPE = code.objPE;

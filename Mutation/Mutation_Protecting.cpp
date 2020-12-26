@@ -82,13 +82,16 @@ void Mutation::Start(CString filepath)
 	Final_MutMemory = code.Final_MutMemory;
 	code.Start_Mutation(code);									
 	////////////////////////////////////////////////////////////////////////////////////
+	/*
 	//开始二次变异
 	code_again = code;
 	Final_MutMemory = code_again.Final_MutMemory;
 	code_again.Start_Mutation(code_again);
+	x86Insn_Mutation_again code3;
+	*/
 	////////////////////////////////////////////////////////////////////////////////////
 	//开始乱序
-	code_rand = code_again;
+	code_rand = code;
 	Final_MutMemory = code_rand.Final_MutMemory;
 	code_rand.Start_Mutation(code_rand);
 
@@ -99,7 +102,7 @@ void Mutation::Start(CString filepath)
 	LPBYTE pFinalBuf = nullptr;
 	DWORD dwFinalBufSize = 0;
 	objPE.MergeBuf(objPE.m_pFileBuf, objPE.m_dwImageSize,
-		(LPBYTE)Final_MutMemory, code_again.Final_CodeSize,
+		(LPBYTE)Final_MutMemory, code_rand.Final_CodeSize,
 		pFinalBuf, dwFinalBufSize);
 	
 	//4.保存文件（处理完成的缓冲区）

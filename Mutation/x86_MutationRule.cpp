@@ -6571,6 +6571,10 @@ UINT rand_order::_jcc_jmp()
 	jcc.imm_offset = x86->encoding.imm_offset;
 	jcc.imm_size = x86->encoding.imm_size;
 	jcc.Target_JumpAddr = (DWORD)x86->operands[0].imm;
+	if (strcmp(insn.mnemonic, "jnp") == 0)
+		return(_jnp(&jcc));
+	if (strcmp(insn.mnemonic, "jns") == 0)
+		return(_jns(&jcc));
 	if (strcmp(insn.mnemonic, "je") == 0)
 		return(_je(&jcc));
 	if (strcmp(insn.mnemonic, "jne") == 0)
@@ -6615,10 +6619,6 @@ UINT rand_order::_jcc_jmp()
 		return(_jnle(&jcc));
 	if (strcmp(insn.mnemonic, "jno") == 0)
 		return(_jno(&jcc));
-	if (strcmp(insn.mnemonic, "jnp") == 0)
-		return(_jnp(&jcc));
-	if (strcmp(insn.mnemonic, "jns") == 0)
-		return(_jns(&jcc));
 	if (strcmp(insn.mnemonic, "jnz") == 0)
 		return(_jnz(&jcc));
 	if (strcmp(insn.mnemonic, "jo") == 0)

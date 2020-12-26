@@ -2,7 +2,7 @@
 #include "rand_order.h"
 #define head_maxsize 6
 #define tail_maxsize 16
-#define link_jmpsize 5
+#define link_jmpsize 0
 /*
 * 乱序这一步必须放在变异完成之后，不能单独用乱序
 */
@@ -31,11 +31,12 @@ BOOL rand_order::Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End, LPBYT
 	if (count) {
 		//针对每段代码变异
 		firstcode_flag = true;
-		phead_mem = nullptr;
-		ptail_mem = nullptr;
+		endcode_flag = false;
 		while (j != count) {
-			if (count - j <= 200)
+			if (count - j <= 200) {
 				order_sum = count - j;
+				endcode_flag = true;
+			}
 			else
 				order_sum = rand() % 200 + 1;
 			Ordered_Insns.index = j;
@@ -64,42 +65,50 @@ BOOL rand_order::Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End, LPBYT
 UINT rand_order::Order_ManyCode()
 {
 	DWORD	Ord_CodeHeadAddr;
-	size_t	Body_Codesize = 0;
+	size_t	Head_Codesize = 0, Body_Codesize = 0, Tail_Codesize = 0;
 	size_t	body_maxsize = 0;
 	size_t	Total_MaxCodesize = 0;
 	size_t	MadeCodesize = 0;
+
+	for (size_t i = 0; i < Ordered_Insns.nums; i++)
+		body_maxsize += Ordered_Insns.order_insn[Ordered_Insns.index + i].size;
+	Total_MaxCodesize = head_maxsize + body_maxsize + tail_maxsize + link_jmpsize;
+
+	/*
 	//如果是乱序段的第一行代码
-	if (firstcode_flag == true) {
+	if (firstcode_flag == true) 
 		Ord_CodeHeadAddr = (DWORD)Final_MutMemory + Final_CodeSize;
-	}
-	else {
-		for (size_t i = 0; i < Ordered_Insns.nums; i++)
-			body_maxsize += Ordered_Insns.order_insn[Ordered_Insns.index + i].size;
-		Total_MaxCodesize = head_maxsize + body_maxsize + tail_maxsize + link_jmpsize;
+	else
 		Ord_CodeHeadAddr = (DWORD)GetTargetAddress(Total_MaxCodesize);
-	}
+	*/
+	Ord_CodeHeadAddr = (DWORD)GetTargetAddress(Total_MaxCodesize);
 
 	//2.生成&处理乱序指令
 	//乱序段首
-	MadeCodesize = MakeOrderHead(Ord_CodeHeadAddr);
+	Head_Codesize = MakeOrderHead(Ord_CodeHeadAddr);
+	MadeCodesize += Head_Codesize;
+	if (Head_Codesize > head_maxsize) {
+		MessageBox(NULL, _T("乱序段首部大小错误"), NULL, NULL);
+	}
 
 	//乱序段主体
 	for (size_t i = 0; i < Ordered_Insns.nums; i++)
 	{
 		this->insn = Ordered_Insns.order_insn[Ordered_Insns.index + i];
-		DWORD Body_CodeStartAddr = Ord_CodeHeadAddr + MadeCodesize;
-		Body_Codesize = MakeOrderBody(Body_CodeStartAddr);
-		MadeCodesize += Body_Codesize;
+		DWORD Body_CodeStartAddr = Ord_CodeHeadAddr + Head_Codesize + Body_Codesize;
+		Body_Codesize += MakeOrderBody(Body_CodeStartAddr);
 	}
+	MadeCodesize += Body_Codesize;
 	if (Body_Codesize > body_maxsize) {
 		MessageBox(NULL, _T("乱序段主体大小错误2"), NULL, NULL);
 	}
 
 	//乱序段尾
 	DWORD Tail_CodeStartAddr = Ord_CodeHeadAddr + MadeCodesize;
-	MadeCodesize += MakeOrderTail(Tail_CodeStartAddr);
-	if (MadeCodesize > Total_MaxCodesize - link_jmpsize) {
-		MessageBox(NULL, _T("实际生成的代码大小超过预测的代码大小"), NULL, NULL);
+	Tail_Codesize = MakeOrderTail(Tail_CodeStartAddr);
+	MadeCodesize += Tail_Codesize;
+	if (Tail_Codesize > tail_maxsize) {
+		MessageBox(NULL, _T("乱序段尾部大小错误"), NULL, NULL);
 	}
 	
 	//Copy_OrdCodes_to_FinalMem(copy_flag, Total_MaxCodesize);
@@ -124,13 +133,13 @@ size_t rand_order::MakeOrderHead(DWORD CodeStartAddr)
 		if (lastjcc.imm_offset == 1)
 			a.add(x86::esp, 4);
 
-		codesize = Mut_Code.codeSize();
+		
 		Mut_Code.flatten();
 		Mut_Code.resolveUnresolvedLinks();
 		DWORD	CodeOffsetAddr = CodeStartAddr - (DWORD)Final_MutMemory;
 		uint64_t BaseAddr = (uint64_t)objPE.m_dwImageBase + objPE.m_dwImageSize + CodeOffsetAddr;
 		Mut_Code.relocateToBase(BaseAddr);
-		Mut_Code.copyFlattenedData((void*)CodeStartAddr, codesize, CodeHolder::kCopyWithPadding);
+		Mut_Code.copyFlattenedData((void*)CodeStartAddr, Mut_Code.codeSize(), CodeHolder::kCopyWithPadding);
 	}
 
 	codesize = Mut_Code.codeSize();
@@ -145,6 +154,40 @@ size_t rand_order::MakeOrderHead(DWORD CodeStartAddr)
 size_t rand_order::MakeOrderBody(DWORD CodeStartAddr)
 {
 	Mut_Code.init(CodeInfo(ArchInfo::kIdHost));
+	size_t codesize = 0;
+	BOOL RelocCheck_flag = false;
+	UINT flag = -1;
+	SingMut_Sec = { 0 };
+
+	SingMut_Sec.Mut_CodeStartAddr = CodeStartAddr;
+	SingMut_Sec.Mut_CodeOffsetAddr = SingMut_Sec.Mut_CodeStartAddr - (DWORD)Final_MutMemory;
+	//1.先判断 该代码地址是否为jcc的目标跳转地址
+	Fix_JmpOffset();
+	//2.特殊处理jcc，jmp，call，add指令，其他指令留给后续函数直接copy他们
+	//这里生成的指令大小最大为6
+	if (strcmp(insn.mnemonic, "add") == 0)
+		flag = _add();
+	if (cs_insn_group(handle, &insn, CS_GRP_JUMP) == true)
+		flag = _jcc_jmp();
+	if (cs_insn_group(handle, &insn, CS_GRP_CALL) == true)
+		flag = _call();
+
+	if (flag != -1)
+	{
+		Mut_Code.flatten();
+		Mut_Code.resolveUnresolvedLinks();
+		DWORD	CodeOffsetAddr = CodeStartAddr - (DWORD)Final_MutMemory;
+		uint64_t BaseAddr = (uint64_t)objPE.m_dwImageBase + objPE.m_dwImageSize + CodeOffsetAddr;
+		Mut_Code.relocateToBase(BaseAddr);
+		Mut_Code.copyFlattenedData((void*)CodeStartAddr, Mut_Code.codeSize(), CodeHolder::kCopyWithPadding);
+
+		codesize = Mut_Code.codeSize();
+		if (codesize > 6) {
+			MessageBox(NULL, _T("乱序段主体大小错误1"), NULL, NULL);
+		}
+	}
+	//-------------------------------------------------------------------------------------------------------------------------
+	//-------------------------------------------------------------------------------------------------------------------------
 	cs_x86* x86;
 	if (insn.detail == NULL)
 		return -1;
@@ -155,102 +198,154 @@ size_t rand_order::MakeOrderBody(DWORD CodeStartAddr)
 	mem.disp_size = x86->encoding.disp_size;
 	imm.imm_offset = x86->encoding.imm_offset;
 	imm.imm_size = x86->encoding.imm_size;
-	size_t codesize = 0;
-	BOOL RelocCheck_flag = false;
-	SingMut_Sec = { 0 };
+	if (flag == -1)
+	{ 
+		//1.加入CodeSection的vector，写到目标地址
+		SingMut_Sec.Raw_CodeAddr = (DWORD)insn.address;
+		SingMut_Sec.BaseAddr = objPE.m_dwImageBase + objPE.m_dwImageSize + SingMut_Sec.Mut_CodeOffsetAddr;
+		SingMut_Sec.Mut_CodeEndAddr = SingMut_Sec.Mut_CodeStartAddr + insn.size;
+		SingMut_Sec.Mut_CodeSize = insn.size;
+		SingMut.push_back(SingMut_Sec);
 
-	
-	SingMut_Sec.Mut_CodeStartAddr = CodeStartAddr;
-	SingMut_Sec.Mut_CodeOffsetAddr = SingMut_Sec.Mut_CodeStartAddr - (DWORD)Final_MutMemory;
-	//1.先判断 该代码地址是否为jcc的目标跳转地址
-	Fix_JmpOffset();
-	//2.特殊处理jcc，jmp，call，add指令，其他指令留给后续函数直接copy他们
-	//这里生成的指令大小最大为6
-	//判断是不是jcc，jmp，call，add指令
-	if (strcmp(insn.mnemonic, "add") == 0)
-		_add();
-	if (cs_insn_group(handle, &insn, CS_GRP_JUMP) == true)
-		_jcc_jmp();
-	if (cs_insn_group(handle, &insn, CS_GRP_CALL) == true)
-		_call();
-
-	codesize += Mut_Code.codeSize();
-	if (codesize > 6) {
-		MessageBox(NULL, _T("乱序段主体大小错误1"), NULL, NULL);
-	}
-		
-	//1.加入CodeSection的vector，写到目标地址
-	SingMut_Sec.Raw_CodeAddr = (DWORD)insn.address;
-	SingMut_Sec.BaseAddr = objPE.m_dwImageBase + objPE.m_dwImageSize + SingMut_Sec.Mut_CodeOffsetAddr;
-	SingMut_Sec.Mut_CodeEndAddr = SingMut_Sec.Mut_CodeStartAddr + insn.size;
-	SingMut_Sec.Mut_CodeSize = insn.size;
-	SingMut.push_back(SingMut_Sec);
-	
-	memcpy_s((void*)SingMut_Sec.Mut_CodeStartAddr, insn.size, (void*)insn.address, insn.size);
-	//3.重定位处理：
-	do {
-		//带有esp/sp寄存器的可能要处理重定位
-		for (int i = 0; i < x86->op_count; i++) {
-			if (x86->operands[i].type == X86_OP_REG) {
-				if (x86->operands[i].reg == X86_REG_ESP || x86->operands[i].reg == X86_REG_SP) {
-					RelocCheck_flag = true;
-					break;
+		memcpy_s((void*)SingMut_Sec.Mut_CodeStartAddr, insn.size, (void*)insn.address, insn.size);
+		//3.重定位处理：
+		do {
+			//没有op操作数
+			if (x86->op_count == 0) {
+				break;
+			}
+			//带有esp/sp寄存器的可能要处理重定位
+			for (int i = 0; i < x86->op_count; i++) {
+				if (x86->operands[i].type == X86_OP_REG) {
+					if (x86->operands[i].reg == X86_REG_ESP || x86->operands[i].reg == X86_REG_SP) {
+						RelocCheck_flag = true;
+						break;
+					}
+				}
+				if (x86->operands[i].type == X86_OP_MEM) {
+					if (x86->operands[i].mem.base == X86_REG_ESP || x86->operands[i].mem.base == X86_REG_SP) {
+						RelocCheck_flag = true;
+						break;
+					}
+					if (x86->operands[i].mem.index == X86_REG_ESP || x86->operands[i].mem.index == X86_REG_SP) {
+						RelocCheck_flag = true;
+						break;
+					}
 				}
 			}
-			if (x86->operands[i].type == X86_OP_MEM) {
-				if (x86->operands[i].mem.base == X86_REG_ESP || x86->operands[i].mem.base == X86_REG_SP) {
-					RelocCheck_flag = true;
-					break;
-				}
-				if (x86->operands[i].mem.index == X86_REG_ESP || x86->operands[i].mem.index == X86_REG_SP) {
-					RelocCheck_flag = true;
-					break;
-				}
+			if (RelocCheck_flag == true)
+				break;
+			//未在之前变异中处理的指令可能要处理重定位
+			if (strcmp(insn.mnemonic, "mov") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "push") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "pop") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "add") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "sub") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jnp") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jns") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jmp") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "call") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "lea") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "xor") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "and") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "or") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "rcl") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "rcr") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "cmp") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "test") == 0)
+				break;
+			//jcc
+			if (strcmp(insn.mnemonic, "je") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jne") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "ja") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jae") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jb") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jbe") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jc") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jecxz") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jg") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jge") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jl") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jle") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jna") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jnae") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jnb") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jnbe") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jnc") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jng") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jnge") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jnl") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jnle") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jno") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jnz") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jo") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jp") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jpe") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jpo") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "js") == 0)
+				break;
+			if (strcmp(insn.mnemonic, "jz") == 0)
+				break;
+			RelocCheck_flag = true;
+		} while (0);
+
+		if (RelocCheck_flag == true) {
+			//如果该指令的mem的disp_size为4，可能有重定位
+			if (mem.disp_size == 4) {
+				DealWithReloc((DWORD)insn.address + mem.disp_offset, SingMut_Sec.BaseAddr + mem.disp_offset);
+			}
+			//如果imm的size为4，可能有重定位
+			if (imm.imm_size == 4) {
+				DealWithReloc((DWORD)insn.address + imm.imm_offset, SingMut_Sec.BaseAddr + imm.imm_offset);
 			}
 		}
-		if (RelocCheck_flag == true)
-			break;
-		//未在之前变异中处理的指令可能要处理重定位
-		if (strcmp(insn.mnemonic, "mov") == 0)
-			break;
-		if (strcmp(insn.mnemonic, "sub") == 0)
-			break;
-		if (strcmp(insn.mnemonic, "xor") == 0)
-			break;
-		if (strcmp(insn.mnemonic, "and") == 0)
-			break;
-		if (strcmp(insn.mnemonic, "or") == 0)
-			break;
-		if (strcmp(insn.mnemonic, "rcl") == 0)
-			break;
-		if (strcmp(insn.mnemonic, "rcr") == 0)
-			break;
-		if (strcmp(insn.mnemonic, "lea") == 0)
-			break;
-		if (strcmp(insn.mnemonic, "cmp") == 0)
-			break;
-		if (strcmp(insn.mnemonic, "test") == 0)
-			break;
-		if (strcmp(insn.mnemonic, "push") == 0)
-			break;
-		if (strcmp(insn.mnemonic, "pop") == 0)
-			break;
-		RelocCheck_flag = true;
-	} while (0);
-	
-	if (RelocCheck_flag == true) {
-		//如果该指令的mem的disp_size为4，可能有重定位
-		if (mem.disp_size == 4) {
-			DealWithReloc((DWORD)insn.address + mem.disp_offset, SingMut_Sec.BaseAddr + mem.disp_offset);
-		}
-		//如果imm的size为4，可能有重定位
-		if (imm.imm_size == 4) {
-			DealWithReloc((DWORD)insn.address + imm.imm_offset, SingMut_Sec.BaseAddr + imm.imm_offset);
-		}
+
+		codesize = insn.size;
 	}
 
-
-	codesize += insn.size;
 	Mut_Code.reset();
 	return codesize;
 
@@ -262,6 +357,21 @@ size_t rand_order::MakeOrderTail(DWORD CodeStartAddr)
 	x86::Assembler a(&Mut_Code);
 	size_t codesize = 0;
 	Order_FixJcc curjcc = { 0 };
+
+	if (endcode_flag == true)
+	{
+		a.jmp(objPE.m_dwImageBase + objPE.m_dwImageSize + Final_CodeSize);
+
+		Mut_Code.flatten();
+		Mut_Code.resolveUnresolvedLinks();
+		DWORD	CodeOffsetAddr = CodeStartAddr - (DWORD)Final_MutMemory;
+		uint64_t BaseAddr = (uint64_t)objPE.m_dwImageBase + objPE.m_dwImageSize + CodeOffsetAddr;
+		Mut_Code.relocateToBase(BaseAddr);
+		Mut_Code.copyFlattenedData((void*)CodeStartAddr, Mut_Code.codeSize(), CodeHolder::kCopyWithPadding);
+
+		Mut_Code.reset();
+		return Mut_Code.codeSize();
+	}
 	//------------------------------------------------------------------------------------------------------------
 	/*
 	* jcc/call连接
@@ -269,43 +379,43 @@ size_t rand_order::MakeOrderTail(DWORD CodeStartAddr)
 	*/
 	//------------------------------------------------------------------------------------------------------------
 	int	randsum = rand() % 10;
-	if (0 <= randsum <= 1) {
+	if (randsum >= 0 && randsum <= 1) {
 		curjcc.address = CodeStartAddr + Mut_Code.codeSize();
 		curjcc.imm_offset = 1;
 		a.call(Unknown_Address);
 
 	}
-	if (2 <= randsum <= 5) {
+	if (randsum >= 2 && randsum <= 5) {
 		//保存eflags环境
 		a.pushfd();
 
 		a.pushfd();
-		a.and_(ptr(x86::esp), 0xF7F);
+		a.and_(dword_ptr(x86::esp), 0xF7F);
 		a.popfd();
 		curjcc.address = CodeStartAddr + Mut_Code.codeSize();
 		curjcc.imm_offset = 2;
 		a.jns(Unknown_Address);
 
 	}
-	if (6 <= randsum <= 9) {
+	if (randsum >= 6 && randsum <= 9) {
 		//保存eflags环境
 		a.pushfd();
 
 		a.pushfd();
-		a.and_(ptr(x86::esp), 0xFFB);
+		a.and_(dword_ptr(x86::esp), 0xFFB);
 		a.popfd();
 		curjcc.address = CodeStartAddr + Mut_Code.codeSize();
 		curjcc.imm_offset = 2;
 		a.jnp(Unknown_Address);
 
 	}
-	codesize = Mut_Code.codeSize();
+	
 	Mut_Code.flatten();
 	Mut_Code.resolveUnresolvedLinks();
 	DWORD	CodeOffsetAddr = CodeStartAddr - (DWORD)Final_MutMemory;
 	uint64_t BaseAddr = (uint64_t)objPE.m_dwImageBase + objPE.m_dwImageSize + CodeOffsetAddr;
 	Mut_Code.relocateToBase(BaseAddr);
-	Mut_Code.copyFlattenedData((void*)CodeStartAddr, codesize, CodeHolder::kCopyWithPadding);
+	Mut_Code.copyFlattenedData((void*)CodeStartAddr, Mut_Code.codeSize(), CodeHolder::kCopyWithPadding);
 
 	//将当前乱序段的待修复的call/jns/jnp信息告知下一个段
 	Order_FixOffset = curjcc;
@@ -316,7 +426,7 @@ size_t rand_order::MakeOrderTail(DWORD CodeStartAddr)
 	}
 	Mut_Code.reset();
 	//留一个5字节大小的空间给写link_jmp
-	plink_jmp = (void*)(CodeStartAddr + codesize);
+	//plink_jmp = (void*)(CodeStartAddr + codesize);
 
 	return codesize;
 
@@ -416,10 +526,24 @@ UINT rand_order::Update_Mem()
 void* rand_order::GetTargetAddress(DWORD codesize)
 {
 	void* result = nullptr;
+	if (codesize >= 0x1000)
+		MessageBox(NULL, _T("乱序段代码过大"), NULL, NULL);
+
 	//如果剩余内存不够0x1000
 	if (FinalRemainMem_Size < 0x1000)
 	{
 		Update_Mem();
+	}
+	if (firstcode_flag == true)
+	{
+		phead_mem = (void*)((DWORD)Final_MutMemory + Final_CodeSize);
+		result = phead_mem;
+		ptail_mem = (void*)((DWORD)phead_mem + 0x1000);
+		phead_mem = (void*)((DWORD)phead_mem + codesize);
+		place_flag = 0;
+		Final_CodeSize += 0x1000;
+		FinalRemainMem_Size -= 0x1000;
+		return result;
 	}
 	//如果乱序内存不够写入本次code，就重新开个0x1000的内存量
 	if ((DWORD)phead_mem + codesize > (DWORD)ptail_mem)
@@ -428,13 +552,6 @@ void* rand_order::GetTargetAddress(DWORD codesize)
 		ptail_mem = (void*)((DWORD)phead_mem + 0x1000);
 		Final_CodeSize += 0x1000;
 		FinalRemainMem_Size -= 0x1000;
-	}
-	if (firstcode_flag == true)
-	{
-		result = phead_mem;
-		phead_mem = (void*)((DWORD)phead_mem + codesize);
-		place_flag = 0;
-		return result;
 	}
 	if (firstcode_flag == false) 
 	{
@@ -454,7 +571,7 @@ void* rand_order::GetTargetAddress(DWORD codesize)
 
 	return nullptr;
 }
-
+/*
 void rand_order::link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Addr)
 {	//只要知道其中一个地址和偏移即可
 	//	start_link，往下跳
@@ -475,3 +592,4 @@ void rand_order::link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE A
 		memcpy_s((void*)((size_t)plink_jmp + 1), 4, &data, 4);
 	}
 }
+*/

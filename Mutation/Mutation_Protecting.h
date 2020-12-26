@@ -89,7 +89,7 @@ public:
 	//开始变异
 	void	Start_Mutation(x86Insn_Mutation& code);
 	//jmp连接首尾
-	virtual void	link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Addr);
+	void	link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Addr);
 	//清除原代码
 	void	ClearCode(LPBYTE Start_Addr, LPBYTE End_Addr);
 
@@ -207,6 +207,13 @@ public:
 		old_Fix_Offset = code.CA_Fix_Offset;
 		objPE = code.objPE;
 	//	Fix_Offset = code.Fix_Offset;
+		Mut_Mark = code.Mut_Mark_again;
+		return *this;
+	}
+	x86Insn_Mutation_again& operator=(const x86Insn_Mutation_again& code) {
+		old_Final_MutMemory = code.Final_MutMemory;
+		old_Fix_Offset = code.CA_Fix_Offset;
+		objPE = code.objPE;
 		Mut_Mark = code.Mut_Mark_again;
 		return *this;
 	}
