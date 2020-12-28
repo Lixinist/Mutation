@@ -79,22 +79,29 @@ void Mutation::Start(CString filepath)
 	//2.开始进行变异
 	//继承objPE和Mut_Mark数据
 	code = *this;
+	code.Start_Mutation(code);		
 	Final_MutMemory = code.Final_MutMemory;
-	code.Start_Mutation(code);									
 	////////////////////////////////////////////////////////////////////////////////////
-	/*
+	
 	//开始二次变异
 	code_again = code;
-	Final_MutMemory = code_again.Final_MutMemory;
 	code_again.Start_Mutation(code_again);
-	x86Insn_Mutation_again code3;
-	*/
+	Final_MutMemory = code_again.Final_MutMemory;
+	
+	/*
+	//开始三次变异
+	x86Insn_Mutation_again code_again2;
+	code_again2 = code_again;
+	code_again2.Start_Mutation(code_again2);
+	Final_MutMemory = code_again2.Final_MutMemory;
 	////////////////////////////////////////////////////////////////////////////////////
+	*/
+	
 	//开始乱序
-	code_rand = code;
+	code_rand = code_again;
 	Final_MutMemory = code_rand.Final_MutMemory;
 	code_rand.Start_Mutation(code_rand);
-
+	
 
 
 	////////////////////////////////////////////////////////////////////////////////////

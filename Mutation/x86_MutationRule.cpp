@@ -850,6 +850,7 @@ UINT x86Insn_Mutation_again::_add()
 	x86_imm imm = { 0 };
 	x86::Assembler a(&Mut_Code);
 	Label L0 = a.newLabel();
+	CA_FixOffset CAFO_Struct = { 0 };
 
 
 	//先判断是否是x16或x8代码
@@ -916,7 +917,12 @@ UINT x86Insn_Mutation_again::_add()
 		if (x86->operands[0].type == X86_OP_REG && x86->operands[1].type == X86_OP_IMM) {
 			for (auto &c : old_Fix_Offset) {
 				if (c.Add_Addr == insn.address) {
+					CAFO_Struct.Add_Addr = (DWORD)Final_MutMemory + SingMut_Sec.Mut_CodeOffsetAddr + Mut_Code.codeSize();
 					a.add(to_asmjit_reg(x86->operands[0].reg), (UINT)c.FixedOffset);
+
+					if (CA_Fix_Offset.back().Call_Addr == 0 || CA_Fix_Offset.back().Add_Addr != 0)
+						MessageBox(NULL, _T("被用于重定位的特殊Call、Add指令的vector表异常"), NULL, NULL);
+					CA_Fix_Offset.back().Add_Addr = CAFO_Struct.Add_Addr;
 					return(Add_FixOffset);
 				}
 			}
@@ -5938,16 +5944,21 @@ UINT x86Insn_Mutation_again::_call()
 	x86_mem mem = { 0 };
 	x86::Assembler a(&Mut_Code);
 	Label L0 = a.newLabel();
+	CA_FixOffset CAFO_Struct = { 0 };
 
 	
 	//call imm
 	if (x86->operands[0].type == X86_OP_IMM) {
 		for (auto &c : old_Fix_Offset) {
 			if (c.Call_Addr == insn.address) {
+				size_t	Call_CodeSize = Mut_Code.codeSize() + SingMut_Sec.Mut_CodeOffsetAddr;
 				a.call(L0);
 				size_t	Temp_CodeSize = Mut_Code.codeSize() + SingMut_Sec.Mut_CodeOffsetAddr;
 				c.FixedOffset = Temp_CodeSize;
 				a.bind(L0);
+
+				CAFO_Struct.Call_Addr = (DWORD)Final_MutMemory + Call_CodeSize;
+				CA_Fix_Offset.push_back(CAFO_Struct);
 				return(Call_FixOffset);
 			}
 		}

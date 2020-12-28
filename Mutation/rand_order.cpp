@@ -4,7 +4,7 @@
 #define tail_maxsize 16
 #define link_jmpsize 0
 /*
-* 乱序这一步必须放在变异完成之后，不能单独用乱序
+* 乱序这一步必须放在变异完成之后，作为最后一步。且不能单独用乱序
 */
 
 
@@ -199,7 +199,7 @@ size_t rand_order::MakeOrderBody(DWORD CodeStartAddr)
 	imm.imm_offset = x86->encoding.imm_offset;
 	imm.imm_size = x86->encoding.imm_size;
 	if (flag == -1)
-	{ 
+	{
 		//1.加入CodeSection的vector，写到目标地址
 		SingMut_Sec.Raw_CodeAddr = (DWORD)insn.address;
 		SingMut_Sec.BaseAddr = objPE.m_dwImageBase + objPE.m_dwImageSize + SingMut_Sec.Mut_CodeOffsetAddr;
@@ -350,6 +350,7 @@ size_t rand_order::MakeOrderBody(DWORD CodeStartAddr)
 	return codesize;
 
 }
+
 
 size_t rand_order::MakeOrderTail(DWORD CodeStartAddr)
 {
