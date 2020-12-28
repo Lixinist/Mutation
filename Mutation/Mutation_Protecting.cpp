@@ -99,10 +99,9 @@ void Mutation::Start(CString filepath)
 	
 	//开始乱序
 	code_rand = code_again;
-	Final_MutMemory = code_rand.Final_MutMemory;
 	code_rand.Start_Mutation(code_rand);
+	Final_MutMemory = code_rand.Final_MutMemory;
 	
-
 
 	////////////////////////////////////////////////////////////////////////////////////
 	//3.合并PE文件和变异代码到新的缓冲区
