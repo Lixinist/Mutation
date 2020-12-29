@@ -1,4 +1,5 @@
 #include "pch.h"
+//#include <algorithm>
 #include "Mutation_Protecting.h"
 #include "auxiliary_function.h"
 #include "rand_order.h"
@@ -920,7 +921,7 @@ UINT x86Insn_Mutation_again::_add()
 					CAFO_Struct.Add_Addr = (DWORD)Final_MutMemory + SingMut_Sec.Mut_CodeOffsetAddr + Mut_Code.codeSize();
 					a.add(to_asmjit_reg(x86->operands[0].reg), (UINT)c.FixedOffset);
 
-					if (CA_Fix_Offset.back().Call_Addr == 0 || CA_Fix_Offset.back().Add_Addr != 0)
+					if (CA_Fix_Offset.back().Call_Addr == 0)
 						MessageBox(NULL, _T("被用于重定位的特殊Call、Add指令的vector表异常"), NULL, NULL);
 					CA_Fix_Offset.back().Add_Addr = CAFO_Struct.Add_Addr;
 					return(Add_FixOffset);
@@ -6200,23 +6201,26 @@ UINT x86Insn_Mutation::_call_imm(x86_jcc* jcc0)
 
 		a.pop(rand0);						//还原rand0寄存器
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.call((UINT)Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.call(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -6225,7 +6229,7 @@ UINT x86Insn_Mutation::_call_imm(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -6306,23 +6310,26 @@ UINT rand_order::_call_imm(x86_jcc* jcc0)
 	if (flag == true)
 	{
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.call((UINT)Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.call(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -6331,7 +6338,7 @@ UINT rand_order::_call_imm(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		
 	}
@@ -6770,23 +6777,26 @@ UINT x86Insn_Mutation::_jmp_imm(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -6795,7 +6805,7 @@ UINT x86Insn_Mutation::_jmp_imm(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -6879,23 +6889,26 @@ UINT rand_order::_jmp_imm(x86_jcc* jcc0)
 	if (flag == true)
 	{
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jcc(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jcc(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -6904,7 +6917,7 @@ UINT rand_order::_jmp_imm(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 
 	}
@@ -7138,23 +7151,26 @@ UINT x86Insn_Mutation::_je(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -7163,7 +7179,7 @@ UINT x86Insn_Mutation::_je(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -7339,23 +7355,26 @@ UINT x86Insn_Mutation::_jne(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -7364,7 +7383,7 @@ UINT x86Insn_Mutation::_jne(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -7550,23 +7569,26 @@ UINT x86Insn_Mutation::_ja(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -7575,7 +7597,7 @@ UINT x86Insn_Mutation::_ja(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -7751,23 +7773,26 @@ UINT x86Insn_Mutation::_jae(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -7776,7 +7801,7 @@ UINT x86Insn_Mutation::_jae(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -7952,23 +7977,26 @@ UINT x86Insn_Mutation::_jb(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -7977,7 +8005,7 @@ UINT x86Insn_Mutation::_jb(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -8165,23 +8193,26 @@ UINT x86Insn_Mutation::_jbe(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -8190,7 +8221,7 @@ UINT x86Insn_Mutation::_jbe(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -8366,23 +8397,26 @@ UINT x86Insn_Mutation::_jc(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -8391,7 +8425,7 @@ UINT x86Insn_Mutation::_jc(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -8583,23 +8617,26 @@ UINT x86Insn_Mutation::_jecxz(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -8608,7 +8645,7 @@ UINT x86Insn_Mutation::_jecxz(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -8802,23 +8839,26 @@ UINT x86Insn_Mutation::_jg(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -8827,7 +8867,7 @@ UINT x86Insn_Mutation::_jg(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -9015,23 +9055,26 @@ UINT x86Insn_Mutation::_jge(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -9040,7 +9083,7 @@ UINT x86Insn_Mutation::_jge(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -9230,23 +9273,26 @@ UINT x86Insn_Mutation::_jl(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -9255,7 +9301,7 @@ UINT x86Insn_Mutation::_jl(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -9451,23 +9497,26 @@ UINT x86Insn_Mutation::_jle(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -9476,7 +9525,7 @@ UINT x86Insn_Mutation::_jle(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -9664,23 +9713,26 @@ UINT x86Insn_Mutation::_jna(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -9689,7 +9741,7 @@ UINT x86Insn_Mutation::_jna(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -9865,23 +9917,26 @@ UINT x86Insn_Mutation::_jnae(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -9890,7 +9945,7 @@ UINT x86Insn_Mutation::_jnae(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -10066,23 +10121,26 @@ UINT x86Insn_Mutation::_jnb(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -10091,7 +10149,7 @@ UINT x86Insn_Mutation::_jnb(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -10277,23 +10335,26 @@ UINT x86Insn_Mutation::_jnbe(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -10302,7 +10363,7 @@ UINT x86Insn_Mutation::_jnbe(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -10478,23 +10539,26 @@ UINT x86Insn_Mutation::_jnc(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -10503,7 +10567,7 @@ UINT x86Insn_Mutation::_jnc(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -10699,23 +10763,26 @@ UINT x86Insn_Mutation::_jng(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -10724,7 +10791,7 @@ UINT x86Insn_Mutation::_jng(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -10914,23 +10981,26 @@ UINT x86Insn_Mutation::_jnge(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -10939,7 +11009,7 @@ UINT x86Insn_Mutation::_jnge(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -11127,23 +11197,26 @@ UINT x86Insn_Mutation::_jnl(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -11152,7 +11225,7 @@ UINT x86Insn_Mutation::_jnl(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -11346,23 +11419,26 @@ UINT x86Insn_Mutation::_jnle(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -11371,7 +11447,7 @@ UINT x86Insn_Mutation::_jnle(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -11547,23 +11623,26 @@ UINT x86Insn_Mutation::_jno(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -11572,7 +11651,7 @@ UINT x86Insn_Mutation::_jno(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -11748,23 +11827,26 @@ UINT x86Insn_Mutation::_jnp(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -11773,7 +11855,7 @@ UINT x86Insn_Mutation::_jnp(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -11858,23 +11940,26 @@ UINT rand_order::_jnp(x86_jcc* jcc0)
 	if (flag == true)
 	{
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jcc(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jcc(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -11883,7 +11968,7 @@ UINT rand_order::_jnp(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 6;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 2;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		
 	}
@@ -12017,23 +12102,26 @@ UINT x86Insn_Mutation::_jns(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -12042,7 +12130,7 @@ UINT x86Insn_Mutation::_jns(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -12127,23 +12215,26 @@ UINT rand_order::_jns(x86_jcc* jcc0)
 	if (flag == true)
 	{
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jcc(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jcc(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -12152,7 +12243,7 @@ UINT rand_order::_jns(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 6;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 2;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		
 	}
@@ -12286,23 +12377,26 @@ UINT x86Insn_Mutation::_jnz(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -12311,7 +12405,7 @@ UINT x86Insn_Mutation::_jnz(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -12487,23 +12581,26 @@ UINT x86Insn_Mutation::_jo(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -12512,7 +12609,7 @@ UINT x86Insn_Mutation::_jo(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -12688,23 +12785,26 @@ UINT x86Insn_Mutation::_jp(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -12713,7 +12813,7 @@ UINT x86Insn_Mutation::_jp(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -12889,23 +12989,26 @@ UINT x86Insn_Mutation::_jpe(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -12914,7 +13017,7 @@ UINT x86Insn_Mutation::_jpe(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -13090,23 +13193,26 @@ UINT x86Insn_Mutation::_jpo(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -13115,7 +13221,7 @@ UINT x86Insn_Mutation::_jpo(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -13291,23 +13397,26 @@ UINT x86Insn_Mutation::_js(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -13316,7 +13425,7 @@ UINT x86Insn_Mutation::_js(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）
@@ -13492,23 +13601,26 @@ UINT x86Insn_Mutation::_jz(x86_jcc* jcc0)
 		a.popfd();
 		a.pop(rand0);
 		//----------------------------------------------------------------------------------------------------------------
-		//2.1判断是否已经生成目标地址
-		bool flag_2 = false;
-		for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
-			//已经生成，修改目标跳转地址
-			if (Target_JumpAddr == iter->Raw_CodeAddr) {
-				flag_2 = true;
-				Target_JumpAddr = iter->BaseAddr;
-				break;
-			}
-		}
-		//2.2已经生成目标地址
-		if (flag_2 == true)
+		//2.1判断3种情况
+		//向上跳（此时目标地址的变异代码已经生成）
+		if (Target_JumpAddr < insn.address)
 		{
+			for (auto iter = SingMut.begin(); iter != SingMut.end(); iter++) {
+				//已经生成，修改目标跳转地址
+				if (Target_JumpAddr == iter->Raw_CodeAddr) {
+					Target_JumpAddr = iter->BaseAddr;
+					break;
+				}
+			}
 			a.jmp(Target_JumpAddr);
 		}
-		//2.3还没有生成目标地址
-		if (flag_2 == false)
+		//向自己跳（直接当做未知指令，留给后续函数copy过去）
+		if (Target_JumpAddr == insn.address)
+		{
+			return -1;
+		}
+		//向下跳（此时目标地址的变异代码还没生成）
+		if (Target_JumpAddr > insn.address)
 		{
 			a.jmp(Unknown_Address);
 			size_t Temp_CodeSize = Mut_Code.codeSize();
@@ -13517,7 +13629,7 @@ UINT x86Insn_Mutation::_jz(x86_jcc* jcc0)
 			FO_Struct.address = SingMut_Sec.Mut_CodeStartAddr + Temp_CodeSize - 5;
 			FO_Struct.Target_JumpAddr = Target_JumpAddr;
 			FO_Struct.imm_offset = 1;
-			Fix_Offset.push_back(FO_Struct);
+			Fix_Offset[Target_JumpAddr].push_back(FO_Struct);
 		}
 		//----------------------------------------------------------------------------------------------------------------
 		//3.随机多分支干扰（copy的前一个）

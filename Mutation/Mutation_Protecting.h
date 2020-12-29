@@ -1,5 +1,6 @@
 #pragma once
 #include <vector>
+#include <map>
 #include <capstone/capstone.h>
 #include "PE.h"
 #include "define.h"
@@ -148,7 +149,8 @@ public:
 	} Single_MutCode, *PSingle_MutCode;
 	Single_MutCode SingMut_Sec;
 	vector<Single_MutCode> SingMut;
-	vector<FixOffset> Fix_Offset;
+	//vector<FixOffset> Fix_Offset;
+	map < DWORD, vector<FixOffset>> Fix_Offset;
 	vector<CA_FixOffset> CA_Fix_Offset;
 
 	//继承成员数据
@@ -175,7 +177,7 @@ public:
 	//修复jmp的offset
 	UINT	Fix_JmpOffset();
 	//更新内存容量
-	UINT	Update_Mem();
+	virtual UINT	Update_Mem();
 	//重定位处理
 	virtual BOOL	DealWithReloc(DWORD DataAddr, DWORD NeedtoReloActuAddr);
 	//转换jcc目标跳转地址为实际地址
@@ -219,6 +221,6 @@ public:
 	}
 };
 
-#define memory_size 0x100000	//1MB
+#define memory_size 0x10000	//1MB
 #define Unknown_Address 0xFFFFFFFF
 

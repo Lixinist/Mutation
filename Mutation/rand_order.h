@@ -21,6 +21,7 @@ class rand_order : public x86Insn_Mutation_again
 {
 public:
 	BOOL	Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End, LPBYTE Jmp_Start, LPBYTE Jmp_End);
+	UINT	Update_Mem();
 	UINT	_jnp(x86_jcc* jcc0);
 	UINT	_jns(x86_jcc* jcc0);
 	UINT	_jmp_imm(x86_jcc* jcc0);

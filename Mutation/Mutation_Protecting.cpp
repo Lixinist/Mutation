@@ -133,7 +133,7 @@ void Mutation::Start_Mutation(x86Insn_Mutation& code)
 		//反汇编&&变异
 		code.Disassemble(iter->Protected_Start, iter->Protected_End, iter->Jmp_Start, iter->Jmp_End);
 		//end_link
-		link_jmp(0, code, objPE, iter->Jmp_End + strlen((char*)Mutation_End));
+		//link_jmp(0, code, objPE, iter->Jmp_End + strlen((char*)Mutation_End));
 		//清除该段的原代码
 		ClearCode(iter->Jmp_Start + 5, iter->Jmp_End + strlen((char*)Mutation_End));
 	}
@@ -164,7 +164,13 @@ BOOL x86Insn_Mutation::Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End,
 			this->insn = insn[j];
 			this->Mutation_SingleCode();
 		}
-		//变异代码首尾地址加入vector（Protected_End不包括jmp end），用于下一次变异
+		//变异代码首尾地址加入vector（Protected_End包括jmp end），用于下一次变异
+		Mark_Struct.Jmp_Start = Jmp_Start;
+		Mark_Struct.Jmp_End = Jmp_End;
+		Mark_Struct.Protected_Start = (LPBYTE)Final_MutMemory;
+		Mark_Struct.Protected_End = (LPBYTE)(size_t)Final_MutMemory + Final_CodeSize;
+		Mut_Mark_again.push_back(Mark_Struct);
+		/*
 		if (Mut_Mark_again.empty()) {
 			Mark_Struct.Jmp_Start = Jmp_Start;
 			Mark_Struct.Jmp_End = Jmp_End;
@@ -179,7 +185,7 @@ BOOL x86Insn_Mutation::Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End,
 			Mark_Struct.Protected_End = (LPBYTE)(size_t)Final_MutMemory + Final_CodeSize;
 			Mut_Mark_again.push_back(Mark_Struct);
 		}
-
+		*/
 		cs_free(insn, count);
 	}
 	else {
@@ -403,7 +409,9 @@ UINT x86Insn_Mutation::Update_Mem()
 		c.Mut_CodeEndAddr += differ;
 	}
 	for (auto &c : Fix_Offset) {
-		c.address += differ;
+		for (auto& b : c.second) {
+			b.address += differ;
+		}
 	}
 	for (auto &c : CA_Fix_Offset) {
 		c.Call_Addr += differ;
@@ -439,7 +447,7 @@ UINT Mutation::Find_MutationMark(LPBYTE pFinalBuf, DWORD size, OUT vector<Mark> 
 		Mark_Struct.Jmp_Start = Start_Addr;
 		Mark_Struct.Jmp_End = End_Addr;
 		Mark_Struct.Protected_Start = Start_Addr + strlen((char*)Mutation_Start);
-		Mark_Struct.Protected_End = End_Addr;
+		Mark_Struct.Protected_End = End_Addr + 2;//2为jmp_end指令大小
 		_Out_Mark->push_back(Mark_Struct);
 		Mut_Mark.push_back(Mark_Struct);
 		Mark_Sum++;

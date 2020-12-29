@@ -173,7 +173,7 @@ BOOL x86Insn_Mutation_again::DealWithReloc(DWORD DataAddr, DWORD NeedtoReloActuA
 
 
 
-//判断并修复jns，jnp跳转
+//判断并修复jmp跳转
 UINT x86Insn_Mutation::Fix_JmpOffset()
 {
 	UINT result = 0;
@@ -181,19 +181,19 @@ UINT x86Insn_Mutation::Fix_JmpOffset()
 	DWORD jcc_addr = 0;
 	uint8_t imm_offset = 0;
 	
-	//从vector中遍历 并判断 是否有jns，jnp跳转到了当前指令地址
-	for (auto &c : Fix_Offset) {
-		if (c.Target_JumpAddr == insn.address) {
-			result = 1;
-			jcc_addr = c.address;
-			imm_offset = c.imm_offset;
-			//让jns，jnp重定位跳向 当前指令的变异代码的地址
-			//公式： jcc_addr + imm_offset + imm_size + jcc_offset = target_addr(SingMut_Sec.Mut_CodeStartAddr)
-			jcc_offset = SingMut_Sec.Mut_CodeStartAddr - imm_offset - 4 - jcc_addr;
-			//写入jns，jnp的offset
-			memcpy_s((void*)(jcc_addr + imm_offset), 4, &jcc_offset, 4);
+	//以当前指令地址为key，从map中查找是否有jcc/jmp需要跳转到当前指令地址
+	 auto search = Fix_Offset.find(insn.address);
+	 if (search != Fix_Offset.end()) {
+		 result = 1;
+		 for (auto& c : search->second) {
+			 jcc_addr = c.address;
+			 imm_offset = c.imm_offset;
+			 //公式： jcc_addr + imm_offset + imm_size + jcc_offset = target_addr(SingMut_Sec.Mut_CodeStartAddr)
+			 jcc_offset = SingMut_Sec.Mut_CodeStartAddr - imm_offset - 4 - jcc_addr;
+			 //写入jcc/jmp的offset
+			 memcpy_s((void*)(jcc_addr + imm_offset), 4, &jcc_offset, 4);
 		}
-	}
+	 }
 	
 	return result;
 }

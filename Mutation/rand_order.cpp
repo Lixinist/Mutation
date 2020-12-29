@@ -60,6 +60,49 @@ BOOL rand_order::Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End, LPBYT
 	return result;
 }
 
+UINT rand_order::Update_Mem()
+{
+	//创建2倍大小的空间并将原空间代码copy过来
+
+	void* temp = Final_MutMemory;
+	size_t temp_size = FinalMem_Size;
+	FinalMem_Size *= 2;
+	Final_MutMemory = VirtualAlloc(NULL, FinalMem_Size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+	if (Final_MutMemory == nullptr)
+	{
+		MessageBox(NULL, _T("Final_MutMemory申请空间失败"), NULL, NULL);
+		return false;
+	}
+	memcpy_s(Final_MutMemory, FinalMem_Size, temp, temp_size);
+	FinalRemainMem_Size = FinalMem_Size - temp_size;
+	VirtualFree(temp, 0, MEM_RELEASE);
+
+	//更新几个vector里的需要改变的绝对地址
+	size_t differ = (size_t)Final_MutMemory - (size_t)temp;
+	for (auto& c : Mut_Mark_again) {
+		c.Protected_Start += differ;
+		c.Protected_End += differ;
+	}
+	for (auto& c : SingMut) {
+		c.Mut_CodeStartAddr += differ;
+		c.Mut_CodeEndAddr += differ;
+	}
+	for (auto& c : Fix_Offset) {
+		for (auto& b : c.second) {
+			b.address += differ;
+		}
+	}
+	for (auto& c : CA_Fix_Offset) {
+		c.Call_Addr += differ;
+		c.Add_Addr += differ;
+	}
+
+	//重写只是多添加了这3行代码
+	Order_FixOffset.address += differ;
+	phead_mem = (void*)((size_t)phead_mem + differ);
+	ptail_mem = (void*)((size_t)ptail_mem + differ);
+	return true;
+}
 
 //针对一段指令生成乱序段
 UINT rand_order::Order_ManyCode()
