@@ -241,6 +241,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="PE.h" />
     <ClInclude Include="rand_order.h" />
+    <ClInclude Include="resource.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

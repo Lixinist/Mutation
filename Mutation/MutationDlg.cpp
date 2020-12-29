@@ -97,7 +97,7 @@ void CMutationDlg::OnDropFiles(HDROP hDropInfo)
 	// TODO: 在此添加消息处理程序代码和/或调用默认值
 	CDialogEx::OnDropFiles(hDropInfo);
 	wchar_t filepath[MAX_PATH] = {0};
-	CString CS_filepath;
+	//CString CS_filepath;
 	DragQueryFile(hDropInfo, 0, filepath, MAX_PATH);	//本来0应该写i，循环取的
 	GetDlgItem(IDC_EDIT2)->SetWindowText(filepath);
 	CS_filepath = filepath;
@@ -111,6 +111,16 @@ void CMutationDlg::OnDropFiles(HDROP hDropInfo)
 void CMutationDlg::OnBnClickedButton1()
 {
 	// TODO: 在此添加控件通知处理程序代码
-	CString CS_filepath = L"C:\\Users\\Administrator\\Desktop\\Test.exe";
-	Mutation().Start(CS_filepath);
+	//CString CS_filepath = L"C:\\Users\\Administrator\\Desktop\\Test.exe";
+	CString Edit_filepath;
+	GetDlgItem(IDC_EDIT2)->GetWindowText(Edit_filepath);
+
+	if (Edit_filepath == "" && CS_filepath == "") {
+		MessageBox(_T("路径为空！"), NULL, NULL);
+		return;
+	}
+	if (Edit_filepath != "")
+		Mutation().Start(Edit_filepath);
+	else
+		Mutation().Start(CS_filepath);
 }
