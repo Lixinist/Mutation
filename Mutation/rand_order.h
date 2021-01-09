@@ -34,11 +34,9 @@ public:
 	size_t	MakeOrderHead(DWORD CodeStartAddr);
 	size_t	MakeOrderBody(DWORD CodeStartAddr);
 	size_t	MakeOrderTail(DWORD	CodeStartAddr);
-
-	//UINT	Copy_OrdCodes_to_FinalMem(BOOL copy_flag, DWORD codesize);
-	//UINT	Update_Mem();
-	//void	link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Addr);
 	void*	GetTargetAddress(DWORD dwsize);
+
+	//void	link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Addr);
 
 public:
 	BOOL		firstcode_flag;
@@ -50,8 +48,7 @@ public:
 	void*		ptail_mem;
 	Order_FixJcc Order_FixOffset;
 	OrderedInsns Ordered_Insns;
-	//void*		plink_jmp;
-
+	
 	//继承成员数据
 	rand_order& operator=(const x86Insn_Mutation_again& code) {
 		old_Final_MutMemory = code.Final_MutMemory;

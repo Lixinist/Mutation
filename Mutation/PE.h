@@ -51,18 +51,15 @@ public:
 	BOOL OpenPEFile(CString strFilePath);		//打开文件
 	BOOL IsPE();								//判断是否为PE文件
 	void GetPEInfo();							//获取PE信息
-	
-
 	void MergeBuf(LPBYTE pFileBuf, DWORD pFileBufSize, 
 		LPBYTE pShellBuf, DWORD pShellBufSize, 
 		LPBYTE& pFinalBuf, DWORD& pFinalBufSize);
 												//合并PE文件和Shell
 
-	void AddSize_RelocSection();
+	void AddSize_RelocSection();				//扩张.reloc区段的大小
 
 	void Find_reloc();							//搜集需要reloc的数据的内存地址及其数据本身的偏移值
 
-	//DWORD Raw_RelocDirsize;						//初始值为原始的重定位表大小
-	BOOL Add_DataToRelocDir(WORD added_offset, DWORD added_VA);
+	BOOL Add_DataToRelocDir(WORD added_offset, DWORD added_VA);		//添加需要重定位的数据
 };
 

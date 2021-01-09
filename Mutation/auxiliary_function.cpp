@@ -1,10 +1,10 @@
+#include "pch.h"
+#include "Mutation_Protecting.h"
+#include "auxiliary_function.h"
 /*
 该cpp的函数都是起辅助作用的函数
 */
 
-#include "pch.h"
-#include "Mutation_Protecting.h"
-#include "auxiliary_function.h"
 
 
 //重定位imm和mem(disp)。有重定位时，基地址会赋给base_reg，偏移给offset。无重定位时，直接返回0
@@ -56,14 +56,16 @@ BOOL x86Insn_Mutation::RelocData_imm_mem(DWORD DataAddr, IN OUT x86::Gp base_reg
 	return false;
 
 }
-/*
+
+BOOL x86Insn_Mutation::DealWithReloc(DWORD DataAddr, DWORD NeedtoReloActuAddr)
+{
+	/*
 	处理可能需要加入重定位表的数据
 	返回值：0，无需重定位。1，有重定位
 	DataAddr：被分析指令的imm或mem_disp地址
 	NeedtoReloActuAddr：需要添加进重定位表的真实地址（imm或mem_disp地址）
-*/
-BOOL x86Insn_Mutation::DealWithReloc(DWORD DataAddr, DWORD NeedtoReloActuAddr)
-{
+	*/
+
 	typedef struct _TYPEOFFSET 
 	{
 	WORD	offset : 12;						//偏移值
@@ -170,8 +172,6 @@ BOOL x86Insn_Mutation_again::DealWithReloc(DWORD DataAddr, DWORD NeedtoReloActuA
 	
 	return flag;
 }
-
-
 
 //判断并修复jmp跳转
 UINT x86Insn_Mutation::Fix_JmpOffset()

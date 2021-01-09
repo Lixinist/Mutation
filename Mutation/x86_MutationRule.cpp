@@ -1,8 +1,8 @@
 #include "pch.h"
-//#include <algorithm>
 #include "Mutation_Protecting.h"
 #include "auxiliary_function.h"
 #include "rand_order.h"
+
 
 UINT x86Insn_Mutation::_mov()
 {

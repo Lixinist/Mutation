@@ -7,6 +7,9 @@
 #else
 #pragma comment(lib, "asmjit.lib")
 #endif 
+#ifdef _WIN64
+#error Not x86.
+#endif
 
 Mutation::Mutation()
 {
@@ -21,7 +24,7 @@ x86Insn_Mutation::x86Insn_Mutation()
 {
 	InitValue();
 
-	//开Final空间
+	//开空间存放变异代码
 	if (Final_MutMemory == nullptr)
 	{
 		Final_MutMemory = VirtualAlloc(NULL, memory_size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
@@ -52,7 +55,6 @@ void x86Insn_Mutation::InitValue()
 
 void Mutation::Start(CString filepath)
 {
-	//CPE	objPE;
 	void* Final_MutMemory = nullptr;
 	vector<Mark> Mark;
 	x86Insn_Mutation code;
@@ -72,12 +74,10 @@ void Mutation::Start(CString filepath)
 	if (Find_MutationMark(objPE.m_pFileBuf, objPE.m_dwImageSize, &Mark) == 0) {
 		MessageBox(NULL, _T("未找到Mutation保护标志！"), NULL, NULL);
 		VirtualFree(objPE.m_pFileBuf, 0, MEM_RELEASE);
-		//delete[] objPE.m_pFileBuf;
 		return;
 	}
 
 	//2.开始进行变异
-	//继承objPE和Mut_Mark数据
 	code = *this;
 	code.Start_Mutation(code);		
 	Final_MutMemory = code.Final_MutMemory;
@@ -116,10 +116,7 @@ void Mutation::Start(CString filepath)
 	//5.释放资源
 	VirtualFree(objPE.m_pFileBuf, 0, MEM_RELEASE);
 	VirtualFree(pFinalBuf, 0, MEM_RELEASE);
-	//VirtualFree(code.Final_MutMemory, 0, MEM_RELEASE);
-	//delete[] objPE.m_pFileBuf;
-	//delete[] pFinalBuf;
-	//free(code.Final_MutMemory);
+	
 }
 //针对所有段的代码
 void Mutation::Start_Mutation(x86Insn_Mutation& code)
@@ -148,13 +145,12 @@ BOOL x86Insn_Mutation::Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End,
 	size_t count;
 	cs_err err = cs_open(CS_ARCH_X86, CS_MODE_32, &handle);
 	if (err) {
-		MessageBox(NULL, _T("Failed on cs_open()"), NULL, NULL);
+		MessageBox(NULL, _T("cs_open()失败！"), NULL, NULL);
 		abort();
 	}
 
+	//解析指令
 	cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-
-	//cs_disasm倒数第二个参数：需要解析的指令数量，0为全部
 	count = cs_disasm(handle, Protected_Start, Protected_End - Protected_Start, address, 0, &insn);
 	if (count) {
 		size_t j;
@@ -164,7 +160,7 @@ BOOL x86Insn_Mutation::Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End,
 			this->insn = insn[j];
 			this->Mutation_SingleCode();
 		}
-		//变异代码首尾地址加入vector（Protected_End包括jmp end），用于下一次变异
+		//生成的变异代码段的首尾地址加入vector（Protected_End包括jmp end），用于下一次变异
 		Mark_Struct.Jmp_Start = Jmp_Start;
 		Mark_Struct.Jmp_End = Jmp_End;
 		Mark_Struct.Protected_Start = (LPBYTE)Final_MutMemory;
@@ -189,7 +185,7 @@ BOOL x86Insn_Mutation::Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End,
 		cs_free(insn, count);
 	}
 	else {
-		printf("ERROR: Failed to disasm given code!\n");
+		MessageBox(NULL, _T("反汇编代码失败！"), NULL, NULL);
 		abort();
 		result = false;
 	}
@@ -299,7 +295,7 @@ UINT x86Insn_Mutation::Analyze_InsnType()
 
 //处理未知的指令
 UINT x86Insn_Mutation::Resolve_UnknownInsn()
-{												//这个函数可能还是要重写一下比较好，如果要重写，就把这个原函数的2个代码注释取消一下
+{												
 	UINT result = -1;
 	cs_x86 *x86;
 	if (insn.detail == NULL)
@@ -341,13 +337,13 @@ UINT x86Insn_Mutation::Resolve_UnknownInsn()
 	if (imm.imm_size == 4) {
 		DealWithReloc((DWORD)insn.address + imm.imm_offset, SingMut_Sec.BaseAddr + imm.imm_offset);
 	}
-	//*/
+	
 	return true;
 }
 
 //将单行指令的变异代码重定位后写到Final空间，并填写CodeSection结构体
 UINT x86Insn_Mutation::Copy_MutCodes_to_FinalMem()
-{								//这个函数可能还是要重写一下比较好，如果要重写，就把这个原函数的2个代码注释取消一下
+{								
 	Mut_Code.flatten();
 	Mut_Code.resolveUnresolvedLinks();
 	//SingMut_Sec = { 0 };
@@ -456,7 +452,7 @@ UINT Mutation::Find_MutationMark(LPBYTE pFinalBuf, DWORD size, OUT vector<Mark> 
 }
 //jmp连接首尾。 1 = Start, 0 = End
 void Mutation::link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Addr)
-{	//只要知道其中一个地址和偏移即可
+{	
 	//	start_link，往下跳
 	if (flag == 1)
 	{

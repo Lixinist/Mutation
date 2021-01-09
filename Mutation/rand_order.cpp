@@ -2,9 +2,9 @@
 #include "rand_order.h"
 #define head_maxsize 6
 #define tail_maxsize 16
-#define link_jmpsize 0
+//#define link_jmpsize 0
 /*
-* 乱序这一步必须放在变异完成之后，作为最后一步。且不能单独用乱序
+* 乱序这一步必须接在变异完成之后，作为最后一步。且不能单独用乱序
 */
 
 
@@ -20,16 +20,16 @@ BOOL rand_order::Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End, LPBYT
 
 	cs_err err = cs_open(CS_ARCH_X86, CS_MODE_32, &handle);
 	if (err) {
-		MessageBox(NULL, _T("Failed on cs_open()"), NULL, NULL);
+		MessageBox(NULL, _T("cs_open()失败！"), NULL, NULL);
 		abort();
 	}
 
+	//解析指令
 	cs_option(handle, CS_OPT_DETAIL, CS_OPT_ON);
-
-	//cs_disasm倒数第二个参数：需要解析的指令数量，0为全部
 	count = cs_disasm(handle, Protected_Start, Protected_End - Protected_Start, address, 0, &insn);
 	if (count) {
 		//针对每段代码变异
+		//每次随机抽1-200条指令作为一个乱序段
 		firstcode_flag = true;
 		endcode_flag = false;
 		while (j != count) {
@@ -51,7 +51,7 @@ BOOL rand_order::Disassemble(LPBYTE Protected_Start, LPBYTE Protected_End, LPBYT
 		cs_free(insn, count);
 	}
 	else {
-		printf("ERROR: Failed to disasm given code!\n");
+		MessageBox(NULL, _T("反汇编代码失败！"), NULL, NULL);
 		abort();
 		result = false;
 	}
@@ -115,18 +115,11 @@ UINT rand_order::Order_ManyCode()
 
 	for (size_t i = 0; i < Ordered_Insns.nums; i++)
 		body_maxsize += Ordered_Insns.order_insn[Ordered_Insns.index + i].size;
-	Total_MaxCodesize = head_maxsize + body_maxsize + tail_maxsize + link_jmpsize;
+	Total_MaxCodesize = head_maxsize + body_maxsize + tail_maxsize ;
 
-	/*
-	//如果是乱序段的第一行代码
-	if (firstcode_flag == true) 
-		Ord_CodeHeadAddr = (DWORD)Final_MutMemory + Final_CodeSize;
-	else
-		Ord_CodeHeadAddr = (DWORD)GetTargetAddress(Total_MaxCodesize);
-	*/
 	Ord_CodeHeadAddr = (DWORD)GetTargetAddress(Total_MaxCodesize);
 
-	//2.生成&处理乱序指令
+	//生成&处理乱序指令
 	//乱序段首
 	Head_Codesize = MakeOrderHead(Ord_CodeHeadAddr);
 	MadeCodesize += Head_Codesize;
@@ -154,7 +147,6 @@ UINT rand_order::Order_ManyCode()
 		MessageBox(NULL, _T("乱序段尾部大小错误"), NULL, NULL);
 	}
 	
-	//Copy_OrdCodes_to_FinalMem(copy_flag, Total_MaxCodesize);
 	return true;
 }
 
@@ -180,7 +172,7 @@ size_t rand_order::MakeOrderHead(DWORD CodeStartAddr)
 		Mut_Code.flatten();
 		Mut_Code.resolveUnresolvedLinks();
 		DWORD	CodeOffsetAddr = CodeStartAddr - (DWORD)Final_MutMemory;
-		uint64_t BaseAddr = (uint64_t)objPE.m_dwImageBase + objPE.m_dwImageSize + CodeOffsetAddr;
+		DWORD	BaseAddr = objPE.m_dwImageBase + objPE.m_dwImageSize + CodeOffsetAddr;
 		Mut_Code.relocateToBase(BaseAddr);
 		Mut_Code.copyFlattenedData((void*)CodeStartAddr, Mut_Code.codeSize(), CodeHolder::kCopyWithPadding);
 	}
@@ -394,7 +386,6 @@ size_t rand_order::MakeOrderBody(DWORD CodeStartAddr)
 
 }
 
-
 size_t rand_order::MakeOrderTail(DWORD CodeStartAddr)
 {
 	Mut_Code.init(CodeInfo(ArchInfo::kIdHost));
@@ -419,7 +410,7 @@ size_t rand_order::MakeOrderTail(DWORD CodeStartAddr)
 	//------------------------------------------------------------------------------------------------------------
 	/*
 	* jcc/call连接
-	* call（2/10），jns（4/10），jnp（4/10）
+	* 概率：call（2/10），jns（4/10），jnp（4/10）
 	*/
 	//------------------------------------------------------------------------------------------------------------
 	int	randsum = rand() % 10;
@@ -469,106 +460,23 @@ size_t rand_order::MakeOrderTail(DWORD CodeStartAddr)
 		MessageBox(NULL, _T("乱序段尾部大小错误"), NULL, NULL);
 	}
 	Mut_Code.reset();
-	//留一个5字节大小的空间给写link_jmp
-	//plink_jmp = (void*)(CodeStartAddr + codesize);
+	
 
 	return codesize;
-
 }
 
-/*
-UINT rand_order::Copy_OrdCodes_to_FinalMem(BOOL copy_flag , DWORD codesize)
-{
-	UINT result = -1;
-	cs_x86* x86;
-	if (insn.detail == NULL)
-		return result;
-	x86 = &(insn.detail->x86);
-	x86_mem mem = { 0 };
-	x86_imm imm = { 0 };
-	mem.disp_offset = x86->encoding.disp_offset;
-	mem.disp_size = x86->encoding.disp_size;
-	imm.imm_offset = x86->encoding.imm_offset;
-	imm.imm_size = x86->encoding.imm_size;
-
-	
-	if (Mut_Code.codeSize() > asmjit_codesize) {
-		MessageBox(NULL, _T("生成的代码大小错误!"), NULL, NULL);
-		throw	"asmjit生成的代码大小大于预测生成的代码大小";
-	}
-	
-	if (copy_flag == true) {
-		codesize = insn.address + Mut_Code.codeSize();
-	}
-	else {
-		codesize = Mut_Code.codeSize();
-	}
-	
-
-	
-	
-
-
-
-
-	if (copy_flag == true)
-	{
-
-	}
-
-
-
-	return 0;
-}
-*/
-/*
-UINT rand_order::Update_Mem()
-{
-	//创建2倍大小的空间并将原空间代码copy过来
-
-	void* temp = Final_MutMemory;
-	size_t temp_size = FinalMem_Size;
-	FinalMem_Size *= 2;
-	Final_MutMemory = VirtualAlloc(NULL, FinalMem_Size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
-	if (Final_MutMemory == nullptr)
-	{
-		MessageBox(NULL, _T("Final_MutMemory申请空间失败"), NULL, NULL);
-	}
-	memcpy_s(Final_MutMemory, FinalMem_Size, temp, temp_size);
-	FinalRemainMem_Size = FinalMem_Size - temp_size;
-	VirtualFree(temp, 0, MEM_RELEASE);
-
-	//更新几个vector里的需要改变的绝对地址
-	size_t differ = (size_t)Final_MutMemory - (size_t)temp;
-	for (auto& c : Mut_Mark_again) {
-		c.Protected_Start += differ;
-		c.Protected_End += differ;
-	}
-	for (auto& c : SingMut) {
-		c.Mut_CodeStartAddr += differ;
-		c.Mut_CodeEndAddr += differ;
-	}
-	for (auto& c : Fix_Offset) {
-		c.address += differ;
-	}
-	//二次变异用到
-	for (auto& c : CA_Fix_Offset) {
-		c.Call_Addr += differ;
-		c.Add_Addr += differ;
-	}
-	//乱序用到
-	Order_FixJcc top = Order_FixOffset.top();
-	Order_FixOffset.pop();
-	top.address += differ;
-	Order_FixOffset.push(top);
-
-
-	return true;
-}
-*/
-
+//取得乱序段所在的目标地址
 void* rand_order::GetTargetAddress(DWORD codesize)
 {
+	/*
+	* 选一片0x1000的空间。
+	* 对于第一个乱序段，将其放入空间的首部；对于第二个乱序段，将其放入空间的尾部
+	* 对于第三个乱序段，将其再次放入空间的首部（接在第一个的后面）；
+	* 对于第四个乱序段，将其再次放入空间的尾部（接在第二个的后面）；
+	* ......
+	* ......
+	*/
+	
 	void* result = nullptr;
 	if (codesize >= 0x1000)
 		MessageBox(NULL, _T("乱序段代码过大"), NULL, NULL);

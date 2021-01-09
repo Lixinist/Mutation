@@ -98,7 +98,7 @@ void CMutationDlg::OnDropFiles(HDROP hDropInfo)
 	CDialogEx::OnDropFiles(hDropInfo);
 	wchar_t filepath[MAX_PATH] = {0};
 	//CString CS_filepath;
-	DragQueryFile(hDropInfo, 0, filepath, MAX_PATH);	//本来0应该写i，循环取的
+	DragQueryFile(hDropInfo, 0, filepath, MAX_PATH);	
 	GetDlgItem(IDC_EDIT2)->SetWindowText(filepath);
 	CS_filepath = filepath;
 	Mutation().Start(CS_filepath);
@@ -111,7 +111,7 @@ void CMutationDlg::OnDropFiles(HDROP hDropInfo)
 void CMutationDlg::OnBnClickedButton1()
 {
 	// TODO: 在此添加控件通知处理程序代码
-	//CString CS_filepath = L"C:\\Users\\Administrator\\Desktop\\Test.exe";
+	
 	CString Edit_filepath;
 	GetDlgItem(IDC_EDIT2)->GetWindowText(Edit_filepath);
 

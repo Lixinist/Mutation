@@ -43,7 +43,6 @@ void CPE::InitValue()
 	m_IATSectionBase	= 0;
 	m_IATSectionSize	= 0;
 
-	//Raw_RelocDirsize	= 0;
 }
 
 //************************************************************
@@ -340,7 +339,7 @@ void CPE::Find_reloc()
 BOOL CPE::Add_DataToRelocDir(WORD added_offset, DWORD added_VA)
 {
 	//这个函数写的还有些问题：
-	//1.重定位的添加写的很粗暴，导致aslr会失效。2.在极端情况下reloc可能溢出覆盖后面的区段，存在不稳定情况
+	//1.重定位的添加写的很粗暴，导致aslr会失效。2.在极端情况下.reloc可能溢出覆盖后面的区段，存在不稳定情况
 	bool flag = 1;
 	//判断是否有重定位表
 	if (m_PERelocDir.VirtualAddress)

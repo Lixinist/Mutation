@@ -68,6 +68,7 @@ public:
 	void InitValue();
 
 public:
+	//保护SDK标志
 	//标志中不要有\x00
 #define Mutation_Start		"\xEB\x0C\x4C\x58\x5F\x4D\x75\x74\x5F\x53\x74\x61\x72\x74"
 #define Mutation_End		"\xEB\x0A\x4C\x58\x5F\x4D\x75\x74\x5F\x45\x6E\x64"
@@ -93,10 +94,7 @@ public:
 	void	link_jmp(int flag, x86Insn_Mutation& code, CPE& objPE, LPBYTE Addr);
 	//清除原代码
 	void	ClearCode(LPBYTE Start_Addr, LPBYTE End_Addr);
-
-
-
-	//保存最终加壳后的文件
+	//保存最终变异后的文件
 	BOOL SaveFinalFile(LPBYTE pFinalBuf, DWORD pFinalBufSize, CString strFilePath);
 };
 
@@ -115,23 +113,21 @@ public:
 
 	//用于变异代码重定位的基地址
 	//void* BaseAddress;
-
-	//单条指令的变异代码
-	CodeHolder	Mut_Code;
 	//单条指令的变异代码的大小
 	//size_t Mut_CodeSize;
 
+	//单条指令的变异代码
+	CodeHolder	Mut_Code;
 	//所有变异代码所在的内存
 	void*		Final_MutMemory;
 	//所有变异代码所在内存的大小
 	size_t		FinalMem_Size;
 	//所有变异代码所在内存的剩余大小
 	size_t		FinalRemainMem_Size;
-
 	//所有变异代码的总大小
-	size_t Final_CodeSize;
+	size_t		Final_CodeSize;
 
-
+	//对单行指令生成的变异代码段
 	typedef struct _Single_MutCode
 	{
 		//原指令地址
@@ -147,13 +143,13 @@ public:
 		//重定位基地址
 		DWORD		BaseAddr;
 	} Single_MutCode, *PSingle_MutCode;
-	Single_MutCode SingMut_Sec;
-	vector<Single_MutCode> SingMut;
-	//vector<FixOffset> Fix_Offset;
+	Single_MutCode					SingMut_Sec;
+	vector<Single_MutCode>			SingMut;
 	map < DWORD, vector<FixOffset>> Fix_Offset;
-	vector<CA_FixOffset> CA_Fix_Offset;
+	vector<CA_FixOffset>			CA_Fix_Offset;
+	//vector<FixOffset> Fix_Offset;
 
-	//继承成员数据
+	//继承PE数据和要保护的代码段
 	x86Insn_Mutation& operator=(const Mutation& Mut) {
 		objPE = Mut.objPE;
 		Mut_Mark = Mut.Mut_Mark;
@@ -196,22 +192,23 @@ public:
 	UINT	_call();
 	UINT	_add();
 public:
-	void* old_Final_MutMemory;
-	vector<CA_FixOffset> old_Fix_Offset;
+	void*	old_Final_MutMemory;
+	vector<CA_FixOffset>	old_Fix_Offset;
 	
-	//继承成员数据
+	//继承一次变异的数据
 	x86Insn_Mutation_again& operator=(const x86Insn_Mutation& code) {
 		//FinalMem_Size = code.FinalMem_Size;
 		//FinalRemainMem_Size = code.FinalRemainMem_Size;
 		//Final_CodeSize = code.Final_CodeSize;
 		//SingMut = code.SingMut;
+		//Fix_Offset = code.Fix_Offset;
 		old_Final_MutMemory = code.Final_MutMemory;
 		old_Fix_Offset = code.CA_Fix_Offset;
 		objPE = code.objPE;
-	//	Fix_Offset = code.Fix_Offset;
 		Mut_Mark = code.Mut_Mark_again;
 		return *this;
 	}
+	//继承上一次变异的数据
 	x86Insn_Mutation_again& operator=(const x86Insn_Mutation_again& code) {
 		old_Final_MutMemory = code.Final_MutMemory;
 		old_Fix_Offset = code.CA_Fix_Offset;
@@ -221,6 +218,6 @@ public:
 	}
 };
 
-#define memory_size 0x10000	//1MB
+#define memory_size 0x100000	//1MB
 #define Unknown_Address 0xFFFFFFFF
 
