@@ -5,8 +5,12 @@
 混淆规则包括mov，push，pop，add，sub，xor，rcl，rcr，or，and，lea，test，所有jcc，call。
 PS：暂时只测试了部分MSVC编译的程序，没有大规模测试。
 
+
+
 开发环境：VS2019，C/C++，x86编译
 用到的库：capstone（反汇编引擎），asmjit（汇编引擎），cyxvc的部分PE库
+
+
 
 
 相关文章及其思路：
